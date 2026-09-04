@@ -1,66 +1,51 @@
-# Aronium Loyalty / Points API
+Aronium Loyalty / Points API
 
-This API connects **Aronium POS** to a mobile loyalty app.
+Cette API permet de connecter Aronium POS à une application mobile de fidélité.
 
-**In simple terms:** Aronium keeps handling customers and sales as usual. The API reads that information and manages loyalty points separately, without modifying Aronium.
+En termes simples : Aronium continue de gérer les clients et les ventes comme d'habitude. L'API lit ces informations et gère les points de fidélité séparément, sans modifier Aronium.
 
-### How it works
-
-* **Aronium (`pos.db`)** → Customer and purchase information. **Read-only.**
-* **Loyalty database (`loyalty.db`)** → Points, point history, and loyalty information.
-* **Mobile app** → Communicates with the API to display and manage customer points.
-
-```text
-Aronium → Loyalty API → Mobile App
+Comment ça fonctionne
+Aronium (pos.db) → Informations sur les clients et les achats. Lecture seule.
+Base de données de fidélité (loyalty.db) → Points, historique des points et informations de fidélité.
+Application mobile → Communique avec l'API pour afficher et gérer les points des clients.
+Aronium → Loyalty API → Application mobile
              ↓
          loyalty.db
-```
+Installation
 
-## Setup
+Installez les dépendances nécessaires :
 
-Install the required packages:
-
-```bash
 pip install -r requirements.txt
-```
 
-Then start the FastAPI server:
+Ensuite, démarrez le serveur FastAPI :
 
-```bash
 uvicorn app.main:app --reload
-```
 
-The API will be available at:
+L'API sera disponible à :
 
-```text
 http://127.0.0.1:8000
-```
 
-Interactive API documentation:
+Documentation interactive de l'API :
 
-```text
 http://127.0.0.1:8000/docs
-```
+Configuration
 
-## Configuration
+Créez un fichier .env à partir de .env.example et configurez :
 
-Create a `.env` file based on `.env.example` and configure:
+ARONIUM_DB_PATH → Emplacement du fichier pos.db d'Aronium
+LOYALTY_DB_PATH → Emplacement où loyalty.db doit être enregistré
+API_KEY → Clé secrète utilisée pour protéger l'API
 
-* `ARONIUM_DB_PATH` → Location of Aronium's `pos.db`
-* `LOYALTY_DB_PATH` → Location where `loyalty.db` should be stored
-* `API_KEY` → Secret key used to protect the API
+Gardez loyalty.db en dehors du dossier Data d'Aronium.
 
-**Keep `loyalty.db` outside Aronium's `Data` folder.**
+Attribution automatique des points
 
-## Automatic Points
+L'API peut vérifier périodiquement les nouvelles ventes effectuées dans Aronium et attribuer automatiquement les points.
 
-The API can periodically check Aronium for new sales and automatically award points.
+Cette vérification peut être programmée avec le Planificateur de tâches Windows ou un autre système de planification.
 
-This can be scheduled using **Windows Task Scheduler** or another scheduling system.
-
-## Important
-
-* Aronium's database is **never modified**.
-* Loyalty data is stored separately in `loyalty.db`.
-* Keep regular backups of `loyalty.db`.
-* Keep the API key secret.
+Important
+La base de données d'Aronium n'est jamais modifiée.
+Les données de fidélité sont stockées séparément dans loyalty.db.
+Faites régulièrement des sauvegardes de loyalty.db.
+Gardez la clé API secrète.
