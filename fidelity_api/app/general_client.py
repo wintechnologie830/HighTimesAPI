@@ -1,10 +1,3 @@
-"""
-The ONLY place in fidelityAPI that talks to generalAPI. Every call carries
-the server-to-server secret (settings.general_api_key) - a credential the
-mobile app never has access to. If generalAPI is unreachable (e.g. Aronium's
-machine rebooting), calls here raise HTTPException(503) so the mobile app
-gets a clear "try again shortly" instead of a confusing 500.
-"""
 import httpx
 from fastapi import HTTPException
 

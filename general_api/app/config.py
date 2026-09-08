@@ -1,7 +1,3 @@
-"""
-Configuration for generalAPI — the ONLY service in this project allowed to
-open Aronium's pos.db. Every value here can be overridden via .env.
-"""
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 

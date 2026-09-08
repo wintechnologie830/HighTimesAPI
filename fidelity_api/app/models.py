@@ -16,13 +16,6 @@ class TransactionType(str, enum.Enum):
 
 
 class LoyaltyAccount(Base):
-    """
-    One row per Aronium customer that participates in the points program.
-    Each customer has their own account and their own points_balance -
-    `aronium_customer_id` is unique, so points are never shared or pooled
-    between customers. This is just a reference to Aronium's customer id;
-    we never copy Aronium's own customer data into loyalty.db.
-    """
     __tablename__ = "loyalty_accounts"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -37,11 +30,6 @@ class LoyaltyAccount(Base):
 
 
 class PointsTransaction(Base):
-    """
-    An immutable ledger entry: every earn, redeem, or manual adjustment.
-    `reference` stores the Aronium Document.Number (for sale-based earns) or
-    a product id (for product redemptions) so nothing is ever double-counted.
-    """
     __tablename__ = "points_transactions"
     __table_args__ = (
         UniqueConstraint("account_id", "reference", "type", name="uq_account_reference_type"),
@@ -59,11 +47,6 @@ class PointsTransaction(Base):
 
 
 class SyncState(Base):
-    """
-    Tracks the last Aronium Document.Id already converted into points, so
-    /sync/run can safely be called repeatedly (idempotent). This is
-    fidelityAPI's own bookkeeping - generalAPI stays stateless.
-    """
     __tablename__ = "sync_state"
 
     id = Column(Integer, primary_key=True, index=True)

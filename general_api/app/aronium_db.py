@@ -1,12 +1,3 @@
-"""
-Read-only access to Aronium's own SQLite database (pos.db).
-
-This is the ONLY module in the entire project that ever opens pos.db, and
-it does so through sqlite's "ro" (read-only) URI mode, so even a bug here
-cannot write to or corrupt Aronium's data. Nothing outside generalAPI ever
-sees this file path or holds a connection to it - fidelityAPI (and the
-mobile app behind it) only ever talk to generalAPI over HTTP.
-"""
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -126,10 +117,6 @@ def list_recent_documents(since_id: int = 0, limit: int = 100) -> list[dict]:
 
 
 # ---------- Products (so the app can show what points can be redeemed for) ----------
-# NOTE: verify these column names against your actual pos.db - Aronium's
-# Product table layout can differ slightly between versions. Run:
-#   SELECT * FROM Product LIMIT 1;
-# in a SQLite browser and adjust the column names below if needed.
 
 def list_products(search: str | None = None, limit: int = 200) -> list[dict]:
     query = """

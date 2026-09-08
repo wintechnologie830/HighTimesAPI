@@ -15,10 +15,6 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Intentionally NO CORS middleware and NO wildcard origins here - this
-# service is not meant to be called from a browser or a phone, only from
-# fidelityAPI running on the same machine.
-
 app.include_router(customers.router)
 app.include_router(products.router)
 app.include_router(documents.router)

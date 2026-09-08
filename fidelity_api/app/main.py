@@ -15,9 +15,6 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# This is the service that IS meant to be reached from the mobile app on
-# the store's isolated Wi-Fi. Tighten allow_origins to your app's actual
-# origin before shipping to production.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -33,7 +30,6 @@ app.include_router(sync.router)
 
 @app.on_event("startup")
 def on_startup():
-    # Creates tables in loyalty.db only.
     init_db()
 
 

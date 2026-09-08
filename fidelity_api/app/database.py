@@ -1,7 +1,3 @@
-"""
-Sets up loyalty.db — the only database fidelityAPI owns. Completely
-separate from pos.db, which this service can't even reach directly.
-"""
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
