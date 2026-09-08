@@ -1,6 +1,6 @@
 """
-This sets up OUR OWN database — completely separate from pos.db — where
-all points/loyalty data is stored. Aronium never sees or touches this file.
+Sets up loyalty.db — the only database fidelityAPI owns. Completely
+separate from pos.db, which this service can't even reach directly.
 """
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
@@ -24,6 +24,5 @@ def get_db():
 
 
 def init_db():
-    # Creates tables in loyalty.db (our own file) if they don't exist yet.
     from app import models  # noqa: F401  (ensures models are registered)
     Base.metadata.create_all(bind=engine)

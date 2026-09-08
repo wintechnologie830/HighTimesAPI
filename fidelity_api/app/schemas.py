@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
-# ---------- Customer (read-only view of Aronium data) ----------
+# ---------- Proxied read-only views (data actually lives behind generalAPI) ----------
 
 class CustomerOut(BaseModel):
     Id: int
@@ -24,17 +24,25 @@ class DocumentOut(BaseModel):
     DocumentTypeCode: str
 
 
-# ---------- Loyalty / points ----------
+class ProductOut(BaseModel):
+    Id: int
+    Name: str
+    Code: str | None = None
+    Price: float
+    IsService: bool
+
+
+# ---------- Loyalty / points (this is data fidelityAPI actually owns) ----------
 
 class PointsBalanceOut(BaseModel):
     aronium_customer_id: int
     points_balance: float
-    point_value_currency: float  # points_balance * redemption value, for convenience
+    point_value_currency: float
 
 
 class EarnPointsIn(BaseModel):
     aronium_customer_id: int
-    amount_spent: float = Field(gt=0, description="Currency amount the points are based on")
+    amount_spent: float = Field(gt=0)
     reference: str | None = Field(
         default=None, description="e.g. Aronium Document Number, to prevent double-earning"
     )
@@ -46,6 +54,15 @@ class RedeemPointsIn(BaseModel):
     points: float = Field(gt=0)
     reference: str | None = None
     note: str | None = None
+
+
+class RedeemProductIn(BaseModel):
+    """Spend points on a specific product instead of a raw point amount.
+    The point cost is computed from the product's live price fetched from
+    generalAPI, so fidelityAPI never has to keep its own copy of prices."""
+    aronium_customer_id: int
+    product_id: int
+    quantity: int = Field(default=1, gt=0)
 
 
 class AdjustPointsIn(BaseModel):

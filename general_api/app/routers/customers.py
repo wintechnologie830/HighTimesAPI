@@ -1,19 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app import aronium_db
-from app.auth import require_api_key
+from app.auth import require_internal_api_key
 from app.schemas import CustomerOut, DocumentOut
 
 router = APIRouter(
     prefix="/customers",
     tags=["customers"],
-    dependencies=[Depends(require_api_key)],
+    dependencies=[Depends(require_internal_api_key)],
 )
 
 
 @router.get("", response_model=list[CustomerOut])
 def list_customers(search: str | None = Query(default=None)):
-    """List customers from Aronium (read-only). Optional ?search=name/email/code."""
     return aronium_db.list_customers(search=search)
 
 
@@ -27,7 +26,6 @@ def get_customer(customer_id: int):
 
 @router.get("/by-card/{card_number}", response_model=CustomerOut)
 def get_customer_by_card(card_number: str):
-    """Look up a customer by their Aronium loyalty card number (barcode/RFID/etc)."""
     customer = aronium_db.get_customer_by_loyalty_card(card_number)
     if not customer:
         raise HTTPException(status_code=404, detail="No customer found for that card number")

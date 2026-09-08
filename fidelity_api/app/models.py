@@ -18,8 +18,10 @@ class TransactionType(str, enum.Enum):
 class LoyaltyAccount(Base):
     """
     One row per Aronium customer that participates in the points program.
-    `aronium_customer_id` is the Id from Aronium's Customer table — we only
-    ever store a reference to it, never a copy of Aronium's own data.
+    Each customer has their own account and their own points_balance -
+    `aronium_customer_id` is unique, so points are never shared or pooled
+    between customers. This is just a reference to Aronium's customer id;
+    we never copy Aronium's own customer data into loyalty.db.
     """
     __tablename__ = "loyalty_accounts"
 
@@ -37,8 +39,8 @@ class LoyaltyAccount(Base):
 class PointsTransaction(Base):
     """
     An immutable ledger entry: every earn, redeem, or manual adjustment.
-    `reference` is used to store the Aronium Document.Number so a sale can
-    never be double-counted into points (see services/points_service.py).
+    `reference` stores the Aronium Document.Number (for sale-based earns) or
+    a product id (for product redemptions) so nothing is ever double-counted.
     """
     __tablename__ = "points_transactions"
     __table_args__ = (
@@ -49,7 +51,7 @@ class PointsTransaction(Base):
     account_id = Column(Integer, ForeignKey("loyalty_accounts.id"), nullable=False)
     type = Column(Enum(TransactionType), nullable=False)
     points = Column(Float, nullable=False)  # positive for EARN, negative for REDEEM
-    reference = Column(String, nullable=True)  # e.g. Aronium Document.Number
+    reference = Column(String, nullable=True)
     note = Column(String, nullable=True)
     date_created = Column(DateTime, default=datetime.utcnow)
 
@@ -58,8 +60,9 @@ class PointsTransaction(Base):
 
 class SyncState(Base):
     """
-    Tracks the last Aronium Document.Id we've already turned into points,
-    so /sync/run can safely be called repeatedly (idempotent).
+    Tracks the last Aronium Document.Id already converted into points, so
+    /sync/run can safely be called repeatedly (idempotent). This is
+    fidelityAPI's own bookkeeping - generalAPI stays stateless.
     """
     __tablename__ = "sync_state"
 

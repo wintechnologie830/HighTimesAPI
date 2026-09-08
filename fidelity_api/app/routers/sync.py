@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app import aronium_db
-from app.auth import require_api_key
+from app import general_client
+from app.auth import require_mobile_api_key
 from app.database import get_db
 from app.models import SyncState
 from app.schemas import SyncResultOut
@@ -11,16 +11,16 @@ from app.services import points_service
 router = APIRouter(
     prefix="/sync",
     tags=["sync"],
-    dependencies=[Depends(require_api_key)],
+    dependencies=[Depends(require_mobile_api_key)],
 )
 
 # Document type codes that should earn points, matched against
-# DocumentType.Code in YOUR pos.db (check yours with:
+# DocumentType.Code in your pos.db (check with:
 #   SELECT Id, Name, Code FROM DocumentType;
-# ). Standard Aronium install ships with:
+# via generalAPI's machine). Standard Aronium install ships with:
 #   100 Purchase | 200 Sales | 300 Inventory Count | 220 Refund
 #   120 Stock Return | 400 Loss And Damage | 230 Proforma
-# By default we only earn points on "Sales" (200) — NOT refunds/purchases/etc.
+# By default we only earn points on "Sales" (200).
 EARNABLE_DOCUMENT_TYPE_CODES = {"200"}
 
 
@@ -37,19 +37,20 @@ def _get_sync_state(db: Session) -> SyncState:
 @router.post("/run", response_model=SyncResultOut)
 def run_sync(db: Session = Depends(get_db)):
     """
-    Reads any new sales from Aronium (pos.db, read-only) that haven't been
-    turned into points yet, and awards points for each one. Safe to call
-    repeatedly (e.g. every few minutes from a scheduler) — already-processed
-    documents are never re-awarded, and pos.db is never modified.
+    Asks generalAPI for any sales newer than the last one we've processed,
+    and awards points for each. fidelityAPI never reads pos.db itself -
+    it only ever sees the fields generalAPI chooses to expose. Safe to call
+    repeatedly (e.g. every few minutes from a scheduler); already-processed
+    documents are never re-awarded.
     """
     state = _get_sync_state(db)
-    documents = aronium_db.list_recent_documents(since_id=state.last_document_id, limit=200)
+    documents = general_client.list_recent_documents(since_id=state.last_document_id, limit=200)
 
     processed = 0
     total_points = 0.0
 
     for doc in documents:
-        if doc["DocumentTypeCode"] in EARNABLE_DOCUMENT_TYPE_CODES and doc["CustomerId"]:
+        if doc["DocumentTypeCode"] in EARNABLE_DOCUMENT_TYPE_CODES and doc.get("CustomerId"):
             try:
                 tx = points_service.earn_points(
                     db,
@@ -61,7 +62,6 @@ def run_sync(db: Session = Depends(get_db)):
                 total_points += tx.points
                 processed += 1
             except points_service.DuplicateReferenceError:
-                # Already awarded for this document number, skip.
                 pass
 
         state.last_document_id = doc["Id"]

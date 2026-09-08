@@ -1,10 +1,11 @@
 """
 Read-only access to Aronium's own SQLite database (pos.db).
 
-IMPORTANT: This module NEVER writes to pos.db. Every connection is opened
-in SQLite's "ro" (read-only) URI mode, so even a bug here cannot corrupt
-your Aronium data. All loyalty/points data lives in a completely separate
-database (see database.py / models.py).
+This is the ONLY module in the entire project that ever opens pos.db, and
+it does so through sqlite's "ro" (read-only) URI mode, so even a bug here
+cannot write to or corrupt Aronium's data. Nothing outside generalAPI ever
+sees this file path or holds a connection to it - fidelityAPI (and the
+mobile app behind it) only ever talk to generalAPI over HTTP.
 """
 import sqlite3
 from contextlib import contextmanager
@@ -18,7 +19,7 @@ def _connect() -> sqlite3.Connection:
     if not db_path.exists():
         raise FileNotFoundError(
             f"Aronium database not found at '{db_path}'. "
-            "Check ARONIUM_DB_PATH in your .env file."
+            "Check ARONIUM_DB_PATH in general_api/.env."
         )
     # uri=True + mode=ro => read-only connection, guarantees we can't write
     uri = f"file:{db_path.as_posix()}?mode=ro"
@@ -35,6 +36,8 @@ def aronium_connection():
     finally:
         conn.close()
 
+
+# ---------- Customers ----------
 
 def list_customers(search: str | None = None) -> list[dict]:
     query = """
@@ -67,15 +70,6 @@ def get_customer(customer_id: int) -> dict | None:
         return dict(row) if row else None
 
 
-def get_loyalty_card_for_customer(customer_id: int) -> dict | None:
-    with aronium_connection() as conn:
-        row = conn.execute(
-            "SELECT Id, CustomerId, CardNumber FROM LoyaltyCard WHERE CustomerId = ?",
-            (customer_id,),
-        ).fetchone()
-        return dict(row) if row else None
-
-
 def get_customer_by_loyalty_card(card_number: str) -> dict | None:
     with aronium_connection() as conn:
         row = conn.execute(
@@ -90,21 +84,7 @@ def get_customer_by_loyalty_card(card_number: str) -> dict | None:
         return dict(row) if row else None
 
 
-def get_document(document_id: int) -> dict | None:
-    """A 'Document' in Aronium is a sale/invoice/receipt etc."""
-    with aronium_connection() as conn:
-        row = conn.execute(
-            """
-            SELECT d.Id, d.Number, d.CustomerId, d.Date, d.Total,
-                   dt.Name AS DocumentTypeName, dt.Code AS DocumentTypeCode
-            FROM Document d
-            JOIN DocumentType dt ON dt.Id = d.DocumentTypeId
-            WHERE d.Id = ?
-            """,
-            (document_id,),
-        ).fetchone()
-        return dict(row) if row else None
-
+# ---------- Sales / documents ----------
 
 def list_customer_documents(customer_id: int, limit: int = 50) -> list[dict]:
     """Purchase history for a customer, most recent first."""
@@ -126,7 +106,7 @@ def list_customer_documents(customer_id: int, limit: int = 50) -> list[dict]:
 
 def list_recent_documents(since_id: int = 0, limit: int = 100) -> list[dict]:
     """
-    Used by the /sync endpoint to find new sales that haven't been
+    Used by fidelityAPI's /sync endpoint to find new sales that haven't been
     turned into loyalty points yet (Id > since_id).
     """
     with aronium_connection() as conn:
@@ -143,3 +123,37 @@ def list_recent_documents(since_id: int = 0, limit: int = 100) -> list[dict]:
             (since_id, limit),
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+# ---------- Products (so the app can show what points can be redeemed for) ----------
+# NOTE: verify these column names against your actual pos.db - Aronium's
+# Product table layout can differ slightly between versions. Run:
+#   SELECT * FROM Product LIMIT 1;
+# in a SQLite browser and adjust the column names below if needed.
+
+def list_products(search: str | None = None, limit: int = 200) -> list[dict]:
+    query = """
+        SELECT Id, Name, Code, Price, IsService
+        FROM Product
+        WHERE IsEnabled = 1
+    """
+    params: tuple = ()
+    if search:
+        query += " AND (Name LIKE ? OR Code LIKE ?)"
+        like = f"%{search}%"
+        params = (like, like)
+    query += " ORDER BY Name LIMIT ?"
+    params = params + (limit,)
+
+    with aronium_connection() as conn:
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_product(product_id: int) -> dict | None:
+    with aronium_connection() as conn:
+        row = conn.execute(
+            "SELECT Id, Name, Code, Price, IsService FROM Product WHERE Id = ?",
+            (product_id,),
+        ).fetchone()
+        return dict(row) if row else None

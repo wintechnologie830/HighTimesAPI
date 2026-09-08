@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.auth import require_api_key
+from app.auth import require_mobile_api_key
 from app.config import settings
 from app.database import get_db
 from app.schemas import (
@@ -9,6 +9,7 @@ from app.schemas import (
     EarnPointsIn,
     PointsBalanceOut,
     RedeemPointsIn,
+    RedeemProductIn,
     TransactionOut,
 )
 from app.services import points_service
@@ -16,12 +17,13 @@ from app.services import points_service
 router = APIRouter(
     prefix="/points",
     tags=["points"],
-    dependencies=[Depends(require_api_key)],
+    dependencies=[Depends(require_mobile_api_key)],
 )
 
 
 @router.get("/{aronium_customer_id}", response_model=PointsBalanceOut)
 def get_balance(aronium_customer_id: int, db: Session = Depends(get_db)):
+    """Each customer's balance is their own - never shared or pooled."""
     account = points_service.get_balance(db, aronium_customer_id)
     return PointsBalanceOut(
         aronium_customer_id=account.aronium_customer_id,
@@ -51,6 +53,7 @@ def earn(payload: EarnPointsIn, db: Session = Depends(get_db)):
 
 @router.post("/redeem", response_model=TransactionOut)
 def redeem(payload: RedeemPointsIn, db: Session = Depends(get_db)):
+    """Redeem a raw number of points (e.g. for a cash-value discount)."""
     try:
         return points_service.redeem_points(
             db,
@@ -58,6 +61,23 @@ def redeem(payload: RedeemPointsIn, db: Session = Depends(get_db)):
             points=payload.points,
             reference=payload.reference,
             note=payload.note,
+        )
+    except points_service.InsufficientPointsError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except points_service.DuplicateReferenceError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@router.post("/redeem-product", response_model=TransactionOut)
+def redeem_product(payload: RedeemProductIn, db: Session = Depends(get_db)):
+    """Spend points directly on a product. Price is fetched live from
+    generalAPI, so it always matches what's in Aronium right now."""
+    try:
+        return points_service.redeem_points_for_product(
+            db,
+            aronium_customer_id=payload.aronium_customer_id,
+            product_id=payload.product_id,
+            quantity=payload.quantity,
         )
     except points_service.InsufficientPointsError as e:
         raise HTTPException(status_code=400, detail=str(e))
