@@ -1,111 +1,76 @@
-# High Times — Loyalty / Points project (two-API architecture)
+# High Times — Loyalty App
 
-Ce projet est maintenant divisé en **deux services séparés**, pour isoler
-complètement la base de données d'Aronium (`pos.db`) de tout ce qui parle à
-l'application mobile.
+Three pieces, same architecture as before (see each service's own docstrings
+for the full reasoning):
 
 ```
-Application mobile
+loyalty-app (browser)
         │  (X-API-Key: FIDELITY_API_KEY)
         ▼
-   fidelityAPI  ──────────────►  generalAPI  ────►  pos.db (Aronium, lecture seule)
+   fidelity_api  ──────────────►  general_api  ────►  pos.db (Aronium)
         │        (X-API-Key: GENERAL_API_KEY)
         ▼
-   loyalty.db (points, comptes, transactions)
+   loyalty.db (points, accounts, transactions, sign-in credentials)
 ```
 
-## Pourquoi deux API plutôt qu'une seule
+- **general_api** is the only thing that ever opens `pos.db`. Read-only for
+  everything except three narrow, atomic writes: taking stock out/putting it
+  back (`/products/{id}/reduce-stock`, `/increase-stock`), recording a real
+  sale (`POST /sales` — Document + DocumentItem + Payment, in the same
+  transaction as the stock reduction), and creating a customer at sign-up
+  (`POST /customers`). It must stay bound to `127.0.0.1`.
+- **fidelity_api** is the only thing the browser talks to. It never sees
+  `pos.db`'s path. New in this version: `/auth/register` and `/auth/login`,
+  backed by a `CustomerCredential` table that lives only in `loyalty.db` —
+  Aronium's own `Customer` table has no password column and never gets one.
+  Buying a product now calls `general_api`'s `/sales` endpoint, so a
+  purchase shows up on Aronium's own Sales screen and counts toward
+  "popular products", not just the loyalty side.
+- **loyalty-app** is a single static `index.html` — no build step. Sign up
+  or sign in, then buy products (earns points, is a real Aronium sale) or
+  redeem points for products. Each product card shows Aronium's live stock
+  count.
 
-Le client veut que la base de données reste sécurisée et privée. Avec une
-seule API, le service qui répond au téléphone est aussi celui qui a le
-chemin d'accès à `pos.db` en mémoire — si ce service est un jour compromis
-(clé volée, bug, dépendance vulnérable, etc.), l'attaquant a une voie directe
-vers la base d'Aronium.
+## Running it
 
-En séparant en deux :
-
-- **generalAPI** est le seul programme qui ouvre `pos.db`, toujours en
-  lecture seule. Il est configuré pour n'écouter que sur `127.0.0.1`
-  (localhost) — il n'est **jamais** accessible depuis le Wi-Fi du magasin,
-  seulement depuis fidelityAPI qui tourne sur la même machine.
-- **fidelityAPI** est le seul programme que le téléphone contacte. Il ne
-  connaît même pas le chemin de `pos.db` — ce n'est pas juste une règle
-  qu'il respecte, le code n'a littéralement pas cette information. Pour
-  tout ce qui touche aux clients, produits ou ventes, il fait une requête
-  HTTP à generalAPI avec un secret que le téléphone ne possède jamais.
-- Le téléphone ne détient qu'une seule clé (`FIDELITY_API_KEY`), qui ne
-  donne accès qu'à fidelityAPI. Même si cette clé fuit, elle n'ouvre aucune
-  porte vers Aronium.
-
-C'est le principe de **défense en profondeur** : compromettre le service
-exposé au public (fidelityAPI) ne donne pas automatiquement accès à la
-donnée la plus sensible (pos.db).
-
-## Points par client
-
-Chaque client Aronium a son propre `LoyaltyAccount` dans `loyalty.db`, lié
-par `aronium_customer_id`. Les soldes ne sont jamais partagés ni regroupés
-entre clients — le point de vente identifie le client (carte de fidélité,
-recherche par nom, etc.) et fidelityAPI ne renvoie/modifie que le solde de
-ce client précis.
-
-- **Gagner des points** : `/points/earn` (manuel) ou automatiquement via
-  `/sync/run`, qui lit les nouvelles ventes depuis generalAPI.
-- **Dépenser des points sur un produit** : `/points/redeem-product` — le
-  prix du produit est demandé en direct à generalAPI (jamais copié dans
-  loyalty.db), donc si le prix change dans Aronium, il est immédiatement à
-  jour côté fidélité.
-- **Dépenser un nombre de points brut** (ex. rabais en argent) :
-  `/points/redeem`.
-- **Correction manuelle** (geste commercial, erreur à corriger) :
-  `/points/adjust`.
-
-## Installation
-
-Chaque service a son propre dossier, son propre `requirements.txt` et son
-propre `.env`.
-
-### 1. generalAPI (sur la machine où tourne Aronium)
-
+### 1. general_api (on the machine running Aronium)
 ```bash
 cd general_api
-cp .env.example .env
-# éditez .env : ARONIUM_DB_PATH doit pointer vers votre pos.db,
-# et choisissez un GENERAL_API_KEY long et aléatoire.
+cp .env.example .env   # set ARONIUM_DB_PATH to your pos.db, pick a GENERAL_API_KEY
 pip install -r requirements.txt
 uvicorn app.main:app --host 127.0.0.1 --port 8001
 ```
 
-Vérifiez bien que `--host` reste `127.0.0.1` — c'est ce qui empêche ce
-service d'être joignable depuis le Wi-Fi du magasin.
-
-### 2. fidelityAPI (peut tourner sur la même machine ou une autre du réseau local)
-
+### 2. fidelity_api (same machine or another on the local network)
 ```bash
 cd fidelity_api
-cp .env.example .env
-# éditez .env :
-#  - GENERAL_API_KEY doit être IDENTIQUE à celui mis dans general_api/.env
-#  - GENERAL_API_BASE_URL doit pointer vers generalAPI (http://127.0.0.1:8001
-#    si les deux services sont sur la même machine)
-#  - choisissez un FIDELITY_API_KEY long et aléatoire, différent du premier
-#    (c'est celui-ci que l'app mobile utilisera)
+cp .env.example .env   # GENERAL_API_KEY must match general_api's; pick a FIDELITY_API_KEY
 pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-L'application mobile ne parle qu'à `fidelityAPI`, sur le port 8000.
-Documentation interactive : `http://<adresse-locale>:8000/docs`.
+### 3. loyalty-app
+Just open `loyalty-app/index.html` in a browser (or serve it from anywhere —
+it only needs to be able to reach `fidelity_api` over HTTP; CORS is already
+open on the API). Under "connection settings", set the fidelity_api base
+URL and its `X-API-Key`, then sign up or sign in.
 
-## Important
+## What's new since the last version
 
-- `pos.db` n'est **jamais** modifié — seul generalAPI l'ouvre, toujours en
-  mode lecture seule (`sqlite ?mode=ro`), et rien d'autre dans le projet
-  n'a accès à son chemin.
-- Les deux clés (`GENERAL_API_KEY` et `FIDELITY_API_KEY`) doivent être
-  différentes et longues/aléatoires. Ne les commitez jamais dans Git —
-  gardez-les seulement dans les fichiers `.env` locaux.
-- Faites des sauvegardes régulières de `loyalty.db`.
-- Si le serveur de fidélité (les deux API) tombe en panne, Aronium continue
-  de fonctionner normalement — aucun des deux services n'est dans le chemin
-  critique du paiement.
+- Sign up / sign in, backed by `/auth/register` and `/auth/login`.
+- Live inventory counts shown on every product card.
+- Buying a product (not just redeeming with points) now takes real stock
+  out of Aronium *and* writes a real Sales document, so it shows up in
+  Aronium's reporting the same way a till sale would.
+
+## Known trade-offs, worth revisiting before real production use
+
+- `record_sale()` always uses `UserId=1` and `WarehouseId=1` as a fixed
+  "web kiosk" identity — fine for a single-till, single-warehouse setup,
+  worth revisiting otherwise.
+- If this app runs alongside a real till that *also* rings up the same
+  transaction, you'd double-count the sale — decide which system is the
+  source of truth for a given purchase.
+- Sign-in has no session token/expiry; the browser just remembers the
+  customer id after a successful login. Fine for a single-user kiosk-style
+  app, not meant to be internet-facing as-is.

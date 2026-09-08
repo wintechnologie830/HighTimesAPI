@@ -8,8 +8,10 @@ from app.schemas import (
     AdjustPointsIn,
     EarnPointsIn,
     PointsBalanceOut,
+    PurchaseProductIn,
     RedeemPointsIn,
     RedeemProductIn,
+    RedeemProductOut,
     TransactionOut,
 )
 from app.services import points_service
@@ -51,6 +53,25 @@ def earn(payload: EarnPointsIn, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail=str(e))
 
 
+@router.post("/purchase", response_model=TransactionOut)
+def purchase(payload: PurchaseProductIn, db: Session = Depends(get_db)):
+    """Buy a product with cash: earns points on the total AND takes the
+    quantity out of real stock, same as a points redemption does."""
+    try:
+        return points_service.purchase_product(
+            db,
+            aronium_customer_id=payload.aronium_customer_id,
+            product_id=payload.product_id,
+            quantity=payload.quantity,
+            reference=payload.reference,
+            note=payload.note,
+        )
+    except points_service.OutOfStockError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except points_service.DuplicateReferenceError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
 @router.post("/redeem", response_model=TransactionOut)
 def redeem(payload: RedeemPointsIn, db: Session = Depends(get_db)):
     """Redeem a raw number of points (e.g. for a cash-value discount)."""
@@ -68,10 +89,12 @@ def redeem(payload: RedeemPointsIn, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail=str(e))
 
 
-@router.post("/redeem-product", response_model=TransactionOut)
+@router.post("/redeem-product", response_model=RedeemProductOut)
 def redeem_product(payload: RedeemProductIn, db: Session = Depends(get_db)):
     """Spend points directly on a product. Price is fetched live from
-    generalAPI, so it always matches what's in Aronium right now."""
+    generalAPI, so it always matches what's in Aronium right now. Points
+    and stock are taken immediately; the response's redemption_code is
+    what the customer shows staff at pickup to claim the product."""
     try:
         return points_service.redeem_points_for_product(
             db,
@@ -81,6 +104,8 @@ def redeem_product(payload: RedeemProductIn, db: Session = Depends(get_db)):
         )
     except points_service.InsufficientPointsError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except points_service.OutOfStockError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except points_service.DuplicateReferenceError as e:
         raise HTTPException(status_code=409, detail=str(e))
 

@@ -1,0 +1,1066 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>High Times — Loyalty Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1c2118;
+    --paper:#f1efe4;
+    --paper-dim:#e6e2d2;
+    --green:#26402f;
+    --green-dim:#3a5a44;
+    --gold:#c9a227;
+    --rust:#a8402f;
+    --line: rgba(28,33,24,0.18);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Fraunces', serif;
+    min-height:100vh;
+  }
+  .mono{ font-family:'JetBrains Mono', monospace; }
+
+  a{ color:inherit; }
+
+  /* ---------- Layout ---------- */
+  .app{
+    display:grid;
+    grid-template-columns: 320px 1fr;
+    min-height:100vh;
+  }
+  @media (max-width: 860px){
+    .app{ grid-template-columns: 1fr; }
+  }
+
+  .ledger{
+    background: var(--green);
+    color: var(--paper);
+    padding: 28px 26px 40px;
+    border-right: 1px solid var(--line);
+    position:relative;
+  }
+  .ledger::after{
+    content:"";
+    position:absolute; top:0; right:-1px; bottom:0; width:1px;
+    background: repeating-linear-gradient(180deg, transparent 0 6px, rgba(241,239,228,0.25) 6px 12px);
+  }
+  .brand{
+    font-size: 26px;
+    font-weight:600;
+    letter-spacing: 0.01em;
+    margin: 0 0 2px;
+  }
+  .brand small{
+    display:block;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--gold);
+    margin-top: 6px;
+  }
+
+  .divider{
+    border:0; border-top: 1px dashed rgba(241,239,228,0.35);
+    margin: 22px 0;
+  }
+
+  .field{ margin-bottom: 14px; }
+  .field label{
+    display:block; font-family:'JetBrains Mono', monospace;
+    font-size: 11px; color: rgba(241,239,228,0.7);
+    margin-bottom: 5px;
+  }
+  .field input{
+    width:100%;
+    background: rgba(241,239,228,0.08);
+    border: 1px solid rgba(241,239,228,0.3);
+    color: var(--paper);
+    padding: 9px 10px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 13px;
+    border-radius: 3px;
+  }
+  .field input::placeholder{ color: rgba(241,239,228,0.4); }
+  .field input:focus{ outline: 2px solid var(--gold); outline-offset: 1px; }
+
+  .btn{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 9px 14px;
+    border-radius: 3px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    background: var(--gold);
+    color: var(--ink);
+    font-weight:700;
+  }
+  .btn:hover{ filter: brightness(1.06); }
+  .btn:disabled{ opacity:0.5; cursor:not-allowed; }
+  .btn.ghost{
+    background: transparent;
+    border-color: rgba(241,239,228,0.4);
+    color: var(--paper);
+  }
+  .btn.small{ padding: 5px 10px; font-size:11px; }
+  .btn.full{ width:100%; }
+
+  .customer-box{
+    background: rgba(241,239,228,0.06);
+    border: 1px solid rgba(241,239,228,0.2);
+    border-radius: 4px;
+    padding: 14px;
+    margin-top: 6px;
+  }
+  .customer-name{ font-size: 18px; margin: 0 0 2px; }
+  .customer-id{ font-family:'JetBrains Mono', monospace; font-size: 11px; color: rgba(241,239,228,0.6); }
+
+  .balance{
+    margin-top: 18px;
+    text-align:center;
+    padding: 18px 10px 20px;
+    border: 1px solid rgba(241,239,228,0.25);
+    border-radius: 4px;
+    background: rgba(0,0,0,0.12);
+  }
+  .balance .num{
+    font-size: 42px;
+    font-weight:600;
+    color: var(--gold);
+    line-height:1;
+  }
+  .balance .label{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing:0.08em;
+    color: rgba(241,239,228,0.65);
+    margin-top: 6px;
+  }
+  .balance .cash{
+    margin-top:8px; font-family:'JetBrains Mono', monospace; font-size: 12px;
+    color: rgba(241,239,228,0.8);
+  }
+
+  .history h3{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.08em; font-weight:500;
+    color: rgba(241,239,228,0.6);
+    margin: 0 0 10px;
+  }
+  .tx{
+    display:flex; justify-content:space-between; gap:10px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 7px 0;
+    border-bottom: 1px dashed rgba(241,239,228,0.18);
+  }
+  .tx .amt.pos{ color:#9fd3a8; }
+  .tx .amt.neg{ color:#e7a89c; }
+  .tx .meta{ color: rgba(241,239,228,0.55); font-size:11px; }
+
+  /* ---------- Main area ---------- */
+  main{ padding: 28px 34px 60px; max-width: 980px; }
+
+  .mode-switch{
+    display:inline-flex;
+    border: 1px solid var(--ink);
+    border-radius: 4px;
+    overflow:hidden;
+    margin-bottom: 22px;
+  }
+  .mode-switch button{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 9px 18px;
+    background: transparent;
+    border:0;
+    cursor:pointer;
+    color: var(--ink);
+  }
+  .mode-switch button.active{
+    background: var(--ink);
+    color: var(--paper);
+  }
+  .mode-switch button:not(.active):hover{ background: var(--paper-dim); }
+
+  h1.page-title{
+    font-size: 30px; font-weight:600; margin: 0 0 4px;
+  }
+  p.page-sub{
+    color: var(--green-dim);
+    margin: 0 0 22px;
+    max-width: 60ch;
+  }
+
+  .search-row{
+    display:flex; gap:10px; margin-bottom: 20px;
+  }
+  .search-row input{
+    flex:1;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 13px;
+    background: #fff;
+  }
+
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+  }
+
+  .card{
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 16px;
+    display:flex; flex-direction:column; gap:10px;
+  }
+  .card .pname{
+    font-size: 17px; font-weight:600; line-height:1.25;
+  }
+  .card .pcode{
+    font-family:'JetBrains Mono', monospace; font-size:11px; color:#7a7a68;
+  }
+  .card .price-row{
+    display:flex; justify-content:space-between; align-items:baseline;
+    margin-top:auto;
+    font-family:'JetBrains Mono', monospace;
+  }
+  .card .price{ font-size: 18px; font-weight:700; color: var(--green); }
+  .card .stock{ font-size: 11px; color:#7a7a68; }
+  .card .stock.low{ color: var(--rust); }
+
+  .qty-row{ display:flex; align-items:center; gap:8px; }
+  .qty-row button{
+    width:26px; height:26px; border-radius:3px; border:1px solid var(--line);
+    background:#fff; cursor:pointer; font-family:'JetBrains Mono', monospace;
+  }
+  .qty-row .qty-val{ font-family:'JetBrains Mono', monospace; min-width: 20px; text-align:center; }
+
+  .redeem-cost{
+    font-family:'JetBrains Mono', monospace; font-size:12px; color: var(--gold);
+    background: rgba(201,162,39,0.12);
+    padding: 5px 8px; border-radius: 3px; display:inline-block;
+  }
+
+  .toast{
+    position:fixed; bottom: 20px; right: 20px;
+    max-width: 360px;
+    background: var(--ink); color: var(--paper);
+    padding: 12px 16px; border-radius: 5px;
+    font-family:'JetBrains Mono', monospace; font-size: 12px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+    opacity:0; transform: translateY(8px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events:none;
+    z-index: 50;
+  }
+  .toast.show{ opacity:1; transform:translateY(0); }
+  .toast.err{ background: var(--rust); }
+  .toast.ok{ background: var(--green); }
+
+  .empty{
+    font-family:'JetBrains Mono', monospace; font-size:13px; color:#7a7a68;
+    padding: 30px 0;
+  }
+
+  .setup-overlay{
+    position:fixed; inset:0; background: rgba(28,33,24,0.6);
+    display:flex; align-items:center; justify-content:center;
+    z-index: 100; padding: 20px;
+  }
+  .setup-card{
+    background: var(--paper); border-radius: 8px; padding: 30px;
+    width: 100%; max-width: 420px;
+    border: 1px solid var(--line);
+  }
+  .setup-card h2{ margin:0 0 6px; font-size:22px; }
+  .setup-card p{ color: var(--green-dim); font-size: 13px; margin: 0 0 18px; }
+  .setup-card .field label{ color: var(--green-dim); }
+  .setup-card .field input{
+    background:#fff; border:1px solid var(--line); color: var(--ink);
+  }
+  .setup-card .btn{ margin-top: 6px; }
+  .hidden{ display:none !important; }
+  .link-btn{
+    background:none; border:0; color: var(--green-dim); text-decoration:underline;
+    font-family:'JetBrains Mono', monospace; font-size:11px; cursor:pointer; padding:0;
+  }
+  .ledger .link-btn{ color: rgba(241,239,228,0.7); }
+
+  /* ---------- pickup code modal ---------- */
+  .modal-overlay{
+    position:fixed; inset:0; background: rgba(28,33,24,0.6);
+    display:flex; align-items:center; justify-content:center;
+    z-index: 90; padding: 20px;
+  }
+  .pickup-card{
+    background: var(--paper); border-radius: 8px; padding: 30px;
+    width: 100%; max-width: 380px; text-align:center;
+    border: 1px solid var(--line);
+  }
+  .pickup-card h2{ margin:0 0 6px; font-size:20px; }
+  .pickup-card p{ color: var(--green-dim); font-size: 13px; margin: 0 0 18px; }
+  .pickup-code{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 40px; font-weight:700; letter-spacing: 0.12em;
+    color: var(--green); background: rgba(38,64,47,0.08);
+    border-radius: 6px; padding: 16px 10px; margin-bottom: 18px;
+  }
+
+  /* ---------- pickups list ---------- */
+  .pickup-row{
+    display:flex; justify-content:space-between; align-items:center; gap:12px;
+    padding: 12px 14px; border: 1px solid var(--line); border-radius: 6px;
+    margin-bottom: 10px; background:#fff;
+  }
+  .pickup-row .pinfo .pname{ font-size:15px; font-weight:600; }
+  .pickup-row .pinfo .pmeta{
+    font-family:'JetBrains Mono', monospace; font-size:11px; color:#7a7a68; margin-top:2px;
+  }
+  .pickup-row .pcode-tag{
+    font-family:'JetBrains Mono', monospace; font-size:18px; font-weight:700;
+    letter-spacing:0.08em; color: var(--green); white-space:nowrap;
+  }
+  .status-tag{
+    font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:0.06em;
+    padding: 3px 7px; border-radius: 3px; white-space:nowrap;
+  }
+  .status-tag.pending{ background: rgba(201,162,39,0.18); color:#8a6d10; }
+  .status-tag.fulfilled{ background: rgba(38,64,47,0.12); color: var(--green); }
+
+  /* ---------- staff panel ---------- */
+  .staff-toggle{
+    position:fixed; bottom:14px; left:14px;
+    font-family:'JetBrains Mono', monospace; font-size:10px;
+    color:#b9b6a4; background:none; border:0; cursor:pointer; padding:4px;
+  }
+  .staff-panel-overlay{
+    position:fixed; inset:0; background: rgba(28,33,24,0.75);
+    display:flex; align-items:flex-start; justify-content:center;
+    z-index: 95; padding: 40px 20px; overflow-y:auto;
+  }
+  .staff-panel{
+    background: var(--paper); border-radius: 8px; padding: 26px;
+    width: 100%; max-width: 640px;
+  }
+  .staff-panel h2{ margin:0 0 4px; font-size:22px; }
+  .staff-panel .close-row{ display:flex; justify-content:space-between; align-items:center; }
+  .staff-lookup-row{ display:flex; gap:8px; margin: 16px 0; }
+  .staff-lookup-row input{
+    flex:1; padding: 10px 12px; border: 1px solid var(--line); border-radius: 4px;
+    font-family:'JetBrains Mono', monospace; font-size: 13px; background:#fff;
+    text-transform: uppercase;
+  }
+  .staff-section-title{
+    font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:0.08em;
+    color: var(--green-dim); margin: 22px 0 10px;
+  }
+</style>
+</head>
+<body>
+
+<div class="setup-overlay" id="setupOverlay">
+  <div class="setup-card">
+    <h2 id="authTitle">Sign in</h2>
+    <p id="authSub">Welcome back to your High Times account.</p>
+
+    <div class="mode-switch" style="margin-bottom:18px;">
+      <button class="active" id="authTabSignin">Sign in</button>
+      <button id="authTabSignup">Create account</button>
+    </div>
+
+    <form id="signinForm">
+      <div class="field">
+        <label for="siName">Full name</label>
+        <input id="siName" autocomplete="username" required />
+      </div>
+      <div class="field">
+        <label for="siPassword">Password</label>
+        <input id="siPassword" type="password" autocomplete="current-password" required />
+      </div>
+      <button class="btn full" type="submit">Sign in</button>
+    </form>
+
+    <form id="signupForm" class="hidden">
+      <div class="field">
+        <label for="suName">Full name</label>
+        <input id="suName" autocomplete="username" required />
+      </div>
+      <div class="field">
+        <label for="suPhone">Phone (optional)</label>
+        <input id="suPhone" type="tel" />
+      </div>
+      <div class="field">
+        <label for="suPassword">Password</label>
+        <input id="suPassword" type="password" autocomplete="new-password" minlength="8" required />
+      </div>
+      <button class="btn full" type="submit">Create account</button>
+    </form>
+
+    <hr class="divider" style="border-top-color: var(--line);" />
+    <button class="link-btn" id="toggleAdvanced">connection settings</button>
+    <div id="advancedFields" class="hidden" style="margin-top:12px;">
+      <div class="field">
+        <label for="cfgBase">fidelityAPI base URL</label>
+        <input id="cfgBase" placeholder="http://localhost:8000" />
+      </div>
+      <div class="field">
+        <label for="cfgKey">X-API-Key</label>
+        <input id="cfgKey" placeholder="FIDELITY_API_KEY" />
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app hidden" id="appRoot">
+  <aside class="ledger">
+    <p class="brand">High Times<small>LOYALTY LEDGER</small></p>
+
+    <div class="customer-box">
+      <p class="customer-name" id="custName">—</p>
+      <p class="customer-id mono" id="custMeta">no customer loaded</p>
+    </div>
+
+    <div class="balance">
+      <div class="num mono" id="balNum">0</div>
+      <div class="label">POINTS BALANCE</div>
+      <div class="cash" id="balCash">worth $0.00</div>
+    </div>
+
+    <hr class="divider" />
+
+    <div class="history">
+      <h3>Recent activity</h3>
+      <div id="txList"></div>
+    </div>
+
+    <hr class="divider" />
+    <button class="link-btn" id="changeConn">connection settings</button>
+    <span style="color:rgba(241,239,228,0.3); font-family:'JetBrains Mono',monospace; font-size:11px;"> · </span>
+    <button class="link-btn" id="logoutBtn">log out</button>
+  </aside>
+
+  <main>
+    <div class="mode-switch">
+      <button class="active" id="modeBuyBtn">Buy products</button>
+      <button id="modeRedeemBtn">Redeem points</button>
+      <button id="modePickupsBtn">My pickups</button>
+    </div>
+
+    <div id="buyView">
+      <h1 class="page-title">Shop</h1>
+      <p class="page-sub">Buying a product earns points on the amount spent. Points post to the ledger instantly.</p>
+      <div class="search-row">
+        <input id="buySearch" placeholder="Search products…" />
+      </div>
+      <div class="grid" id="buyGrid"></div>
+    </div>
+
+    <div id="redeemView" class="hidden">
+      <h1 class="page-title">Rewards</h1>
+      <p class="page-sub">Spend points on a product. The point cost is calculated live from the current price. You'll get a pickup code to show at the counter - the product itself is waiting for you in store.</p>
+      <div class="search-row">
+        <input id="redeemSearch" placeholder="Search rewards…" />
+      </div>
+      <div class="grid" id="redeemGrid"></div>
+    </div>
+
+    <div id="pickupsView" class="hidden">
+      <h1 class="page-title">My pickups</h1>
+      <p class="page-sub">Show the code for anything still pending to the cashier when you're in store to collect it.</p>
+      <div id="pickupsList"></div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-overlay hidden" id="pickupModal">
+  <div class="pickup-card">
+    <h2>Redeemed!</h2>
+    <p id="pickupModalDesc">Show this code at the counter to pick up your item.</p>
+    <div class="pickup-code mono" id="pickupModalCode">------</div>
+    <button class="btn full" id="pickupModalClose">Got it</button>
+  </div>
+</div>
+
+<button class="staff-toggle" id="staffToggle">staff</button>
+
+<div class="staff-panel-overlay hidden" id="staffOverlay">
+  <div class="staff-panel">
+    <div class="close-row">
+      <h2>Staff pickup desk</h2>
+      <button class="link-btn" id="staffClose">close</button>
+    </div>
+    <p class="page-sub" style="margin-top:6px;">Look up a redemption by code, or find a customer in the pending list, then mark it picked up.</p>
+
+    <div id="staffPinGate">
+      <div class="field">
+        <label for="staffPinInput">Staff PIN</label>
+        <input id="staffPinInput" type="password" />
+      </div>
+      <button class="btn" id="staffPinSubmit">Unlock</button>
+    </div>
+
+    <div id="staffTools" class="hidden">
+      <div class="staff-lookup-row">
+        <input id="staffCodeInput" placeholder="Enter pickup code…" maxlength="6" />
+        <button class="btn" id="staffCodeLookupBtn">Look up</button>
+      </div>
+      <div id="staffLookupResult"></div>
+
+      <div class="staff-section-title">Pending pickups</div>
+      <div class="search-row">
+        <input id="staffSearchInput" placeholder="Search by customer name…" />
+      </div>
+      <div id="staffPendingList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  const store = {
+    get base(){ return localStorage.getItem('lp_base') || 'http://localhost:8000'; },
+    set base(v){ localStorage.setItem('lp_base', v); },
+    get key(){ return localStorage.getItem('lp_key') || ''; },
+    set key(v){ localStorage.setItem('lp_key', v); },
+    get customerId(){ return localStorage.getItem('lp_customer') || ''; },
+    set customerId(v){ localStorage.setItem('lp_customer', v); },
+    get customerName(){ return localStorage.getItem('lp_customer_name') || ''; },
+    set customerName(v){ localStorage.setItem('lp_customer_name', v); },
+    clearSession(){
+      localStorage.removeItem('lp_customer');
+      localStorage.removeItem('lp_customer_name');
+    },
+  };
+
+  let pointValueCurrency = 0.05; // fallback display ratio, refined once balance loads
+  let mode = 'buy';
+  let products = [];
+
+  // ---------- toast ----------
+  const toastEl = document.getElementById('toast');
+  let toastTimer;
+  function toast(msg, type){
+    toastEl.textContent = msg;
+    toastEl.className = 'toast show' + (type ? ' ' + type : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toastEl.classList.remove('show'); }, 3600);
+  }
+
+  // ---------- api ----------
+  async function api(path, opts){
+    opts = opts || {};
+    const headers = Object.assign({ 'X-API-Key': store.key }, opts.headers || {});
+    if (opts.body) headers['Content-Type'] = 'application/json';
+    let res;
+    try{
+      res = await fetch(store.base.replace(/\/$/, '') + path, {
+        method: opts.method || 'GET',
+        headers,
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
+    }catch(e){
+      throw new Error('Could not reach fidelityAPI at ' + store.base + '. Is it running?');
+    }
+    let data = null;
+    try{ data = await res.json(); }catch(e){ /* no body */ }
+    if(!res.ok){
+      const detail = (data && data.detail) ? data.detail : (res.status + ' ' + res.statusText);
+      throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+    }
+    return data;
+  }
+
+  // ---------- setup / auth ----------
+  const setupOverlay = document.getElementById('setupOverlay');
+  const appRoot = document.getElementById('appRoot');
+
+  function openSetup(){
+    document.getElementById('cfgBase').value = store.base;
+    document.getElementById('cfgKey').value = store.key;
+    setupOverlay.classList.remove('hidden');
+    appRoot.classList.add('hidden');
+  }
+
+  function requireConnection(){
+    store.base = document.getElementById('cfgBase').value.trim() || store.base;
+    store.key = document.getElementById('cfgKey').value.trim();
+    if(!store.key){
+      toast('Set the fidelityAPI X-API-Key under "connection settings" first.', 'err');
+      return false;
+    }
+    return true;
+  }
+
+  // advanced connection fields toggle
+  document.getElementById('toggleAdvanced').addEventListener('click', () => {
+    document.getElementById('advancedFields').classList.toggle('hidden');
+  });
+
+  // sign in / sign up tabs
+  const authTabSignin = document.getElementById('authTabSignin');
+  const authTabSignup = document.getElementById('authTabSignup');
+  const signinForm = document.getElementById('signinForm');
+  const signupForm = document.getElementById('signupForm');
+  const authTitle = document.getElementById('authTitle');
+  const authSub = document.getElementById('authSub');
+
+  authTabSignin.addEventListener('click', () => {
+    authTabSignin.classList.add('active'); authTabSignup.classList.remove('active');
+    signinForm.classList.remove('hidden'); signupForm.classList.add('hidden');
+    authTitle.textContent = 'Sign in';
+    authSub.textContent = 'Welcome back to your High Times account.';
+  });
+  authTabSignup.addEventListener('click', () => {
+    authTabSignup.classList.add('active'); authTabSignin.classList.remove('active');
+    signupForm.classList.remove('hidden'); signinForm.classList.add('hidden');
+    authTitle.textContent = 'Create account';
+    authSub.textContent = 'Sign up once, then earn and spend points on every visit.';
+  });
+
+  signinForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    if(!requireConnection()) return;
+    const name = document.getElementById('siName').value.trim();
+    const password = document.getElementById('siPassword').value;
+    const btn = signinForm.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    try{
+      const auth = await api('/auth/login', { method: 'POST', body: { name, password } });
+      store.customerId = String(auth.aronium_customer_id);
+      store.customerName = auth.name;
+      setupOverlay.classList.add('hidden');
+      appRoot.classList.remove('hidden');
+      await bootstrap();
+    }catch(e){
+      toast(e.message, 'err');
+    }finally{
+      btn.disabled = false;
+    }
+  });
+
+  signupForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    if(!requireConnection()) return;
+    const name = document.getElementById('suName').value.trim();
+    const phone = document.getElementById('suPhone').value.trim();
+    const password = document.getElementById('suPassword').value;
+    const btn = signupForm.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    try{
+      const auth = await api('/auth/register', {
+        method: 'POST',
+        body: { name, password, phone: phone || null },
+      });
+      store.customerId = String(auth.aronium_customer_id);
+      store.customerName = auth.name;
+      setupOverlay.classList.add('hidden');
+      appRoot.classList.remove('hidden');
+      toast('Account created — welcome, ' + auth.name + '.', 'ok');
+      await bootstrap();
+    }catch(e){
+      toast(e.message, 'err');
+    }finally{
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('changeConn').addEventListener('click', () => {
+    document.getElementById('advancedFields').classList.remove('hidden');
+    openSetup();
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    store.clearSession();
+    openSetup();
+  });
+
+  // ---------- ledger sidebar ----------
+  async function refreshCustomer(){
+    if(store.customerName){
+      document.getElementById('custName').textContent = store.customerName;
+      document.getElementById('custMeta').textContent = 'ID ' + store.customerId;
+    }
+    try{
+      const c = await api('/customers/' + encodeURIComponent(store.customerId));
+      document.getElementById('custName').textContent = c.Name;
+      document.getElementById('custMeta').textContent = 'ID ' + c.Id + (c.Code ? ' · card ' + c.Code : '');
+      store.customerName = c.Name;
+    }catch(e){
+      if(!store.customerName){
+        document.getElementById('custName').textContent = 'Unknown customer';
+        document.getElementById('custMeta').textContent = e.message;
+      }
+    }
+  }
+
+  async function refreshBalance(){
+    try{
+      const b = await api('/points/' + encodeURIComponent(store.customerId));
+      document.getElementById('balNum').textContent = formatPoints(b.points_balance);
+      document.getElementById('balCash').textContent = 'worth $' + b.point_value_currency.toFixed(2);
+      if(b.points_balance > 0){
+        pointValueCurrency = b.point_value_currency / b.points_balance;
+      }
+    }catch(e){
+      toast(e.message, 'err');
+    }
+  }
+
+  async function refreshHistory(){
+    const list = document.getElementById('txList');
+    try{
+      const txs = await api('/points/' + encodeURIComponent(store.customerId) + '/history?limit=8');
+      if(!txs.length){
+        list.innerHTML = '<div class="empty" style="padding:6px 0;color:rgba(241,239,228,0.5);">no activity yet</div>';
+        return;
+      }
+      list.innerHTML = txs.map(t => {
+        const pos = t.points >= 0;
+        const date = new Date(t.date_created);
+        return '<div class="tx"><span>' +
+          '<div>' + escapeHtml(t.type) + '</div>' +
+          '<div class="meta">' + date.toLocaleDateString() + (t.reference ? ' · ' + escapeHtml(t.reference) : '') + '</div>' +
+          '</span><span class="amt ' + (pos ? 'pos' : 'neg') + '">' + (pos ? '+' : '') + formatPoints(t.points) + '</span></div>';
+      }).join('');
+    }catch(e){
+      list.innerHTML = '<div class="empty" style="padding:6px 0;color:rgba(241,239,228,0.5);">' + escapeHtml(e.message) + '</div>';
+    }
+  }
+
+  function formatPoints(n){
+    return Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  // ---------- products ----------
+  async function loadProducts(search){
+    const grid = document.getElementById(mode === 'buy' ? 'buyGrid' : 'redeemGrid');
+    grid.innerHTML = '<div class="empty">loading products…</div>';
+    try{
+      const q = search ? ('?search=' + encodeURIComponent(search)) : '';
+      products = await api('/products' + q);
+      renderGrid();
+    }catch(e){
+      grid.innerHTML = '<div class="empty">' + escapeHtml(e.message) + '</div>';
+    }
+  }
+
+  const qtyState = {}; // productId -> qty for buy mode
+
+  function renderGrid(){
+    const grid = document.getElementById(mode === 'buy' ? 'buyGrid' : 'redeemGrid');
+    if(!products.length){
+      grid.innerHTML = '<div class="empty">No products found.</div>';
+      return;
+    }
+    grid.innerHTML = '';
+    products.forEach(p => {
+      const card = document.createElement('div');
+      card.className = 'card';
+
+      if(mode === 'buy'){
+        if(qtyState[p.Id] === undefined) qtyState[p.Id] = 1;
+        const qty = qtyState[p.Id];
+        const stock = p.Quantity; // live Aronium stock - this is what goes down on purchase
+        const outOfStock = stock !== null && stock !== undefined && stock <= 0;
+        card.innerHTML =
+          '<div class="pname">' + escapeHtml(p.Name) + '</div>' +
+          (p.Code ? '<div class="pcode">' + escapeHtml(p.Code) + '</div>' : '') +
+          '<div class="stock' + (outOfStock ? ' low' : '') + '">' +
+            (stock === null || stock === undefined ? 'stock not tracked' : (outOfStock ? 'out of stock' : stock + ' in stock')) +
+          '</div>' +
+          '<div class="qty-row">' +
+            '<button data-act="dec" aria-label="decrease quantity">−</button>' +
+            '<span class="qty-val">' + qty + '</span>' +
+            '<button data-act="inc" aria-label="increase quantity">+</button>' +
+          '</div>' +
+          '<div class="price-row"><span class="price">$' + p.Price.toFixed(2) + '</span>' +
+          '<button class="btn small" data-act="buy" ' + (outOfStock ? 'disabled' : '') + '>Buy</button></div>';
+
+        card.querySelector('[data-act="dec"]').addEventListener('click', () => {
+          qtyState[p.Id] = Math.max(1, qtyState[p.Id] - 1);
+          renderGrid();
+        });
+        card.querySelector('[data-act="inc"]').addEventListener('click', () => {
+          qtyState[p.Id] = qtyState[p.Id] + 1;
+          renderGrid();
+        });
+        card.querySelector('[data-act="buy"]').addEventListener('click', () => buyProduct(p, qtyState[p.Id]));
+      } else {
+        const estCost = pointValueCurrency > 0 ? Math.ceil(p.Price / pointValueCurrency) : null;
+        const inv = p.Inventory;
+        const lowStock = inv !== null && inv !== undefined && inv <= 0;
+        card.innerHTML =
+          '<div class="pname">' + escapeHtml(p.Name) + '</div>' +
+          (p.Code ? '<div class="pcode">' + escapeHtml(p.Code) + '</div>' : '') +
+          '<div class="stock' + (lowStock ? ' low' : '') + '">' +
+            (inv === null || inv === undefined ? 'stock not tracked' : (lowStock ? 'out of redeemable stock' : inv + ' redeemable in stock')) +
+          '</div>' +
+          (estCost !== null ? '<span class="redeem-cost">~' + estCost + ' pts</span>' : '') +
+          '<div class="price-row"><span class="price">$' + p.Price.toFixed(2) + '</span>' +
+          '<button class="btn small" data-act="redeem" ' + (lowStock ? 'disabled' : '') + '>Redeem</button></div>';
+
+        const btn = card.querySelector('[data-act="redeem"]');
+        btn.addEventListener('click', () => redeemProduct(p));
+      }
+
+      grid.appendChild(card);
+    });
+  }
+
+  async function buyProduct(p, qty){
+    try{
+      const tx = await api('/points/purchase', {
+        method: 'POST',
+        body: {
+          aronium_customer_id: Number(store.customerId),
+          product_id: p.Id,
+          quantity: qty,
+          reference: 'webapp-' + Date.now(),
+        },
+      });
+      toast('Bought ' + qty + ' × ' + p.Name + ' — earned ' + formatPoints(tx.points) + ' pts', 'ok');
+      qtyState[p.Id] = 1;
+      await Promise.all([refreshBalance(), refreshHistory()]);
+      await loadProducts(document.getElementById('buySearch').value.trim());
+    }catch(e){
+      toast('Purchase failed: ' + e.message, 'err');
+    }
+  }
+
+  async function redeemProduct(p){
+    try{
+      const tx = await api('/points/redeem-product', {
+        method: 'POST',
+        body: {
+          aronium_customer_id: Number(store.customerId),
+          product_id: p.Id,
+          quantity: 1,
+        },
+      });
+      showPickupModal(tx);
+      await Promise.all([refreshBalance(), refreshHistory()]);
+      await loadProducts(document.getElementById('redeemSearch').value.trim());
+    }catch(e){
+      toast('Redeem failed: ' + e.message, 'err');
+    }
+  }
+
+  // ---------- pickup code modal ----------
+  const pickupModal = document.getElementById('pickupModal');
+  function showPickupModal(tx){
+    document.getElementById('pickupModalDesc').textContent =
+      tx.quantity + ' × ' + tx.product_name + ' — show this code at the counter to pick it up.';
+    document.getElementById('pickupModalCode').textContent = tx.redemption_code;
+    pickupModal.classList.remove('hidden');
+  }
+  document.getElementById('pickupModalClose').addEventListener('click', () => {
+    pickupModal.classList.add('hidden');
+  });
+
+  // ---------- my pickups ----------
+  async function loadPickups(){
+    const list = document.getElementById('pickupsList');
+    list.innerHTML = '<div class="empty">loading…</div>';
+    try{
+      const redemptions = await api('/redemptions/customer/' + encodeURIComponent(store.customerId));
+      if(!redemptions.length){
+        list.innerHTML = '<div class="empty">No redemptions yet — spend points under "Redeem points" to get a pickup code.</div>';
+        return;
+      }
+      list.innerHTML = redemptions.map(renderPickupRow).join('');
+    }catch(e){
+      list.innerHTML = '<div class="empty">' + escapeHtml(e.message) + '</div>';
+    }
+  }
+
+  function renderPickupRow(r){
+    const isPending = r.status === 'PENDING';
+    const date = new Date(r.date_created);
+    return '<div class="pickup-row">' +
+      '<div class="pinfo">' +
+        '<div class="pname">' + escapeHtml(r.quantity + ' × ' + r.product_name) + '</div>' +
+        '<div class="pmeta">' + date.toLocaleDateString() + ' · ' + formatPoints(r.points_spent) + ' pts</div>' +
+      '</div>' +
+      (isPending
+        ? '<span class="pcode-tag mono">' + escapeHtml(r.code) + '</span>'
+        : '<span class="status-tag fulfilled">picked up</span>') +
+      '</div>';
+  }
+
+  // ---------- staff pickup desk ----------
+  let staffPin = '';
+
+  async function staffApi(path, opts){
+    opts = opts || {};
+    opts.headers = Object.assign({ 'X-Staff-Pin': staffPin }, opts.headers || {});
+    return api(path, opts);
+  }
+
+  const staffOverlay = document.getElementById('staffOverlay');
+  const staffPinGate = document.getElementById('staffPinGate');
+  const staffTools = document.getElementById('staffTools');
+
+  document.getElementById('staffToggle').addEventListener('click', () => {
+    staffOverlay.classList.remove('hidden');
+  });
+  document.getElementById('staffClose').addEventListener('click', () => {
+    staffOverlay.classList.add('hidden');
+  });
+
+  document.getElementById('staffPinSubmit').addEventListener('click', async () => {
+    const pin = document.getElementById('staffPinInput').value.trim();
+    if(!pin){ return; }
+    staffPin = pin;
+    try{
+      await staffApi('/redemptions/staff/pending');
+      staffPinGate.classList.add('hidden');
+      staffTools.classList.remove('hidden');
+      refreshStaffPending('');
+    }catch(e){
+      staffPin = '';
+      toast('Wrong staff PIN', 'err');
+    }
+  });
+
+  document.getElementById('staffCodeLookupBtn').addEventListener('click', async () => {
+    const code = document.getElementById('staffCodeInput').value.trim();
+    const resultEl = document.getElementById('staffLookupResult');
+    if(!code){ return; }
+    resultEl.innerHTML = '<div class="empty">looking up…</div>';
+    try{
+      const r = await staffApi('/redemptions/staff/by-code/' + encodeURIComponent(code));
+      resultEl.innerHTML = renderStaffRow(r);
+      wireStaffFulfillButtons(resultEl);
+    }catch(e){
+      resultEl.innerHTML = '<div class="empty">' + escapeHtml(e.message) + '</div>';
+    }
+  });
+
+  function renderStaffRow(r){
+    const isPending = r.status === 'PENDING';
+    const date = new Date(r.date_created);
+    return '<div class="pickup-row">' +
+      '<div class="pinfo">' +
+        '<div class="pname">' + escapeHtml(r.customer_name || ('customer #' + r.aronium_customer_id)) + ' — ' + escapeHtml(r.quantity + ' × ' + r.product_name) + '</div>' +
+        '<div class="pmeta">code ' + escapeHtml(r.code) + ' · redeemed ' + date.toLocaleString() + '</div>' +
+      '</div>' +
+      (isPending
+        ? '<button class="btn small" data-fulfill="' + r.id + '">Mark picked up</button>'
+        : '<span class="status-tag fulfilled">picked up</span>') +
+      '</div>';
+  }
+
+  function wireStaffFulfillButtons(container){
+    container.querySelectorAll('[data-fulfill]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try{
+          await staffApi('/redemptions/staff/' + btn.getAttribute('data-fulfill') + '/fulfill', { method: 'POST' });
+          toast('Marked as picked up', 'ok');
+          document.getElementById('staffCodeInput').value = '';
+          document.getElementById('staffLookupResult').innerHTML = '';
+          refreshStaffPending(document.getElementById('staffSearchInput').value.trim());
+        }catch(e){
+          toast(e.message, 'err');
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  async function refreshStaffPending(search){
+    const list = document.getElementById('staffPendingList');
+    list.innerHTML = '<div class="empty">loading…</div>';
+    try{
+      const q = search ? ('?search=' + encodeURIComponent(search)) : '';
+      const redemptions = await staffApi('/redemptions/staff/pending' + q);
+      if(!redemptions.length){
+        list.innerHTML = '<div class="empty">Nothing pending.</div>';
+        return;
+      }
+      list.innerHTML = redemptions.map(renderStaffRow).join('');
+      wireStaffFulfillButtons(list);
+    }catch(e){
+      list.innerHTML = '<div class="empty">' + escapeHtml(e.message) + '</div>';
+    }
+  }
+
+  let staffSearchTimer;
+  document.getElementById('staffSearchInput').addEventListener('input', (ev) => {
+    clearTimeout(staffSearchTimer);
+    staffSearchTimer = setTimeout(() => refreshStaffPending(ev.target.value.trim()), 300);
+  });
+
+  // ---------- mode switching ----------
+  const buyView = document.getElementById('buyView');
+  const redeemView = document.getElementById('redeemView');
+  const pickupsView = document.getElementById('pickupsView');
+  const modeBuyBtn = document.getElementById('modeBuyBtn');
+  const modeRedeemBtn = document.getElementById('modeRedeemBtn');
+  const modePickupsBtn = document.getElementById('modePickupsBtn');
+
+  function setMode(m){
+    mode = m;
+    modeBuyBtn.classList.toggle('active', m === 'buy');
+    modeRedeemBtn.classList.toggle('active', m === 'redeem');
+    modePickupsBtn.classList.toggle('active', m === 'pickups');
+    buyView.classList.toggle('hidden', m !== 'buy');
+    redeemView.classList.toggle('hidden', m !== 'redeem');
+    pickupsView.classList.toggle('hidden', m !== 'pickups');
+    if(m === 'pickups'){
+      loadPickups();
+      return;
+    }
+    const search = m === 'buy' ? document.getElementById('buySearch').value.trim() : document.getElementById('redeemSearch').value.trim();
+    loadProducts(search);
+  }
+  modeBuyBtn.addEventListener('click', () => setMode('buy'));
+  modeRedeemBtn.addEventListener('click', () => setMode('redeem'));
+  modePickupsBtn.addEventListener('click', () => setMode('pickups'));
+
+  let searchTimer;
+  function debounceSearch(inputEl){
+    inputEl.addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => loadProducts(inputEl.value.trim()), 300);
+    });
+  }
+  debounceSearch(document.getElementById('buySearch'));
+  debounceSearch(document.getElementById('redeemSearch'));
+
+  // ---------- bootstrap ----------
+  async function bootstrap(){
+    await refreshCustomer();
+    await refreshBalance();
+    await refreshHistory();
+    await loadProducts('');
+  }
+
+  if(store.key && store.customerId){
+    appRoot.classList.remove('hidden');
+    setupOverlay.classList.add('hidden');
+    bootstrap();
+  } else {
+    openSetup();
+  }
+})();
+</script>
+</body>
+</html>

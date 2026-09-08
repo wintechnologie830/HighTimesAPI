@@ -5,6 +5,24 @@ from pydantic import BaseModel, Field
 
 # ---------- Proxied read-only views (data actually lives behind generalAPI) ----------
 
+# ---------- Sign up / sign in ----------
+
+class RegisterIn(BaseModel):
+    name: str
+    password: str = Field(min_length=8)
+    phone: str | None = None
+
+
+class LoginIn(BaseModel):
+    name: str
+    password: str
+
+
+class AuthOut(BaseModel):
+    aronium_customer_id: int
+    name: str
+
+
 class CustomerOut(BaseModel):
     Id: int
     Code: str | None = None
@@ -24,16 +42,7 @@ class DocumentOut(BaseModel):
     DocumentTypeCode: str
 
 
-class ProductOut(BaseModel):
-    Id: int
-    Name: str
-    Code: str | None = None
-    Price: float
-    IsService: bool
-
-
 # ---------- Loyalty / points (this is data fidelityAPI actually owns) ----------
-
 class PointsBalanceOut(BaseModel):
     aronium_customer_id: int
     points_balance: float
@@ -53,6 +62,20 @@ class RedeemPointsIn(BaseModel):
     aronium_customer_id: int
     points: float = Field(gt=0)
     reference: str | None = None
+    note: str | None = None
+
+
+class PurchaseProductIn(BaseModel):
+    """Buy a product with real money (not points). Price is fetched live
+    from generalAPI, points are earned on the total, and - unlike a plain
+    /points/earn call - the purchased quantity is taken out of Aronium's
+    real stock, the same way a points redemption is."""
+    aronium_customer_id: int
+    product_id: int
+    quantity: int = Field(default=1, gt=0)
+    reference: str | None = Field(
+        default=None, description="e.g. a POS ticket number, to prevent double-earning"
+    )
     note: str | None = None
 
 
@@ -83,7 +106,39 @@ class TransactionOut(BaseModel):
         from_attributes = True
 
 
+class RedeemProductOut(TransactionOut):
+    """Same as TransactionOut, plus what the app needs to show the
+    customer their pickup code right after redeeming."""
+    redemption_id: int
+    redemption_code: str
+    product_name: str
+    quantity: int
+
+
+class RedemptionOut(BaseModel):
+    id: int
+    code: str
+    aronium_customer_id: int | None
+    customer_name: str | None
+    product_id: int
+    product_name: str
+    quantity: int
+    points_spent: float
+    status: str
+    date_created: datetime
+    date_fulfilled: datetime | None
+
+
 class SyncResultOut(BaseModel):
     processed_documents: int
     points_awarded: float
     last_document_id: int
+
+class ProductOut(BaseModel):
+    Id: int
+    Name: str
+    Code: str | None = None
+    Price: float
+    IsService: bool
+    Quantity: float = 0  # real live stock, from Aronium's own Stock table
+    Inventory: int | None = None  # fidelityAPI's local redeemable-stock counter

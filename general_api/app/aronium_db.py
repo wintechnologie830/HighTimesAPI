@@ -1,5 +1,6 @@
 import sqlite3
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 
 from app.config import settings
@@ -15,6 +16,25 @@ def _connect() -> sqlite3.Connection:
     # uri=True + mode=ro => read-only connection, guarantees we can't write
     uri = f"file:{db_path.as_posix()}?mode=ro"
     conn = sqlite3.connect(uri, uri=True)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _connect_write() -> sqlite3.Connection:
+    """
+    Read-write connection. Only used by the stock functions below, which
+    are the ONE deliberate exception to "generalAPI never writes to
+    pos.db". Everything else in this module (and the whole project) still
+    only ever reads. Keeping the write path narrow and in this single file
+    is what lets us say elsewhere that nothing else can touch pos.db.
+    """
+    db_path = Path(settings.aronium_db_path)
+    if not db_path.exists():
+        raise FileNotFoundError(
+            f"Aronium database not found at '{db_path}'. "
+            "Check ARONIUM_DB_PATH in general_api/.env."
+        )
+    conn = sqlite3.connect(db_path.as_posix())
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -120,16 +140,17 @@ def list_recent_documents(since_id: int = 0, limit: int = 100) -> list[dict]:
 
 def list_products(search: str | None = None, limit: int = 200) -> list[dict]:
     query = """
-        SELECT Id, Name, Code, Price, IsService
-        FROM Product
-        WHERE IsEnabled = 1
+        SELECT p.Id, p.Name, p.Code, p.Price, p.IsService,
+               COALESCE((SELECT SUM(s.Quantity) FROM Stock s WHERE s.ProductId = p.Id), 0) AS Quantity
+        FROM Product p
+        WHERE p.IsEnabled = 1
     """
     params: tuple = ()
     if search:
-        query += " AND (Name LIKE ? OR Code LIKE ?)"
+        query += " AND (p.Name LIKE ? OR p.Code LIKE ?)"
         like = f"%{search}%"
         params = (like, like)
-    query += " ORDER BY Name LIMIT ?"
+    query += " ORDER BY p.Name LIMIT ?"
     params = params + (limit,)
 
     with aronium_connection() as conn:
@@ -140,7 +161,245 @@ def list_products(search: str | None = None, limit: int = 200) -> list[dict]:
 def get_product(product_id: int) -> dict | None:
     with aronium_connection() as conn:
         row = conn.execute(
-            "SELECT Id, Name, Code, Price, IsService FROM Product WHERE Id = ?",
+            """
+            SELECT p.Id, p.Name, p.Code, p.Price, p.IsService,
+                   COALESCE((SELECT SUM(s.Quantity) FROM Stock s WHERE s.ProductId = p.Id), 0) AS Quantity
+            FROM Product p
+            WHERE p.Id = ?
+            """,
             (product_id,),
         ).fetchone()
         return dict(row) if row else None
+
+
+# ---------- Customer creation (another narrow, deliberate write) ----------
+#
+# Sign-up needs a real Aronium Customer row - not just something inside
+# fidelityAPI's own database - so the store's till and reports recognize
+# this person the same way they'd recognize anyone signed up in person.
+# No password or auth of any kind is stored here: that lives entirely in
+# fidelityAPI's loyalty.db, which is the only thing that needs it.
+
+def create_customer(name: str, email: str | None, phone: str | None) -> dict:
+    conn = _connect_write()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        cur = conn.execute(
+            """
+            INSERT INTO Customer (
+                Name, Email, PhoneNumber, IsEnabled, IsCustomer, IsSupplier,
+                DueDatePeriod, DateCreated, DateUpdated, IsTaxExempt
+            ) VALUES (?, ?, ?, 1, 1, 0, 0, DATETIME('now'), DATETIME('now'), 0)
+            """,
+            (name, email, phone),
+        )
+        customer_id = cur.lastrowid
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return get_customer(customer_id)
+
+
+# ---------- Sale recording (the other narrow, deliberate write) ----------
+#
+# A cash purchase made through the loyalty app is a real sale, so it needs
+# to show up in Aronium the way any till sale would - a Document (type
+# "Sales"), its DocumentItem line, and a Payment - so the Sales screen's
+# totals and "popular products" reflect it. This is folded into the same
+# atomic transaction as the stock reduction: either the whole sale is
+# recorded (stock down, document created, payment logged) or none of it
+# is, so pos.db never ends up with stock missing but no matching sale.
+
+def _next_document_number(conn, type_code: str) -> str:
+    year = datetime.now().strftime("%y")
+    counter_name = f"Document.{type_code}.20{year}"
+    row = conn.execute("SELECT Value FROM Counter WHERE Name = ?", (counter_name,)).fetchone()
+    if row is None:
+        next_value = 1
+        conn.execute("INSERT INTO Counter (Name, Value) VALUES (?, ?)", (counter_name, next_value))
+    else:
+        next_value = row["Value"] + 1
+        conn.execute("UPDATE Counter SET Value = ? WHERE Name = ?", (next_value, counter_name))
+    return f"{year}-{type_code}-{next_value:06d}"
+
+
+SALES_DOCUMENT_TYPE_ID = 2
+SALES_DOCUMENT_TYPE_CODE = "200"
+DEFAULT_WAREHOUSE_ID = 1
+DEFAULT_USER_ID = 1
+
+
+def record_sale(
+    customer_id: int | None,
+    product_id: int,
+    quantity: int,
+    unit_price: float,
+    payment_type_id: int = 1,
+) -> dict | None:
+    """
+    Atomically: check + reduce Stock, then write a Sales Document +
+    DocumentItem + Payment for it. Returns None (no change made) if there
+    isn't enough stock. Mirrors reduce_stock()'s atomicity, just with the
+    bookkeeping rows added in the same transaction.
+    """
+    if quantity <= 0:
+        raise ValueError("quantity must be positive")
+
+    total = round(unit_price * quantity, 2)
+
+    conn = _connect_write()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+
+        stock_rows = conn.execute(
+            "SELECT Id, Quantity FROM Stock WHERE ProductId = ? ORDER BY Id",
+            (product_id,),
+        ).fetchall()
+        total_available = sum(r["Quantity"] for r in stock_rows)
+        if total_available < quantity:
+            conn.rollback()
+            return None
+
+        remaining = quantity
+        for row in stock_rows:
+            if remaining <= 0:
+                break
+            take = min(row["Quantity"], remaining)
+            if take <= 0:
+                continue
+            conn.execute("UPDATE Stock SET Quantity = Quantity - ? WHERE Id = ?", (take, row["Id"]))
+            remaining -= take
+
+        number = _next_document_number(conn, SALES_DOCUMENT_TYPE_CODE)
+
+        cur = conn.execute(
+            """
+            INSERT INTO Document (
+                Number, UserId, CustomerId, Date, StockDate, Total,
+                IsClockedOut, DocumentTypeId, WarehouseId, DateCreated,
+                DateUpdated, PaidStatus, ServiceType
+            ) VALUES (
+                ?, ?, ?, DATETIME('now'), DATETIME('now'), ?,
+                0, ?, ?, DATETIME('now'), DATETIME('now'), 2, 1
+            )
+            """,
+            (number, DEFAULT_USER_ID, customer_id, total, SALES_DOCUMENT_TYPE_ID, DEFAULT_WAREHOUSE_ID),
+        )
+        document_id = cur.lastrowid
+
+        conn.execute(
+            """
+            INSERT INTO DocumentItem (
+                DocumentId, ProductId, Quantity, PriceBeforeTax, Price,
+                ProductCost, PriceBeforeTaxAfterDiscount, PriceAfterDiscount,
+                Total, TotalAfterDocumentDiscount
+            ) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+            """,
+            (document_id, product_id, quantity, unit_price, unit_price, unit_price, unit_price, total, total),
+        )
+
+        conn.execute(
+            """
+            INSERT INTO Payment (
+                DocumentId, PaymentTypeId, Amount, Date, UserId, DateCreated
+            ) VALUES (?, ?, ?, DATETIME('now'), ?, DATETIME('now'))
+            """,
+            (document_id, payment_type_id, total, DEFAULT_USER_ID),
+        )
+
+        conn.commit()
+        return {"document_id": document_id, "number": number, "total": total}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+#
+# A loyalty redemption is a real sale of a real product - if we don't take
+# it out of Aronium's own Stock table, the register still thinks that unit
+# is available and someone can sell it again at the till. So this has to
+# be a genuine write to pos.db, not just a counter inside loyalty.db.
+#
+# It's kept here, behind these two narrow functions, so the guarantee
+# elsewhere ("only generalAPI can write, and only this one path") stays true.
+
+def reduce_stock(product_id: int, quantity: int) -> bool:
+    """
+    Atomically take `quantity` units of a product out of Stock, across
+    warehouses if it's split across more than one. Returns False (and
+    makes NO change) if there isn't enough total stock - this is what
+    stops overselling, so the check and the write happen in one
+    transaction, never as two separate steps.
+    """
+    if quantity <= 0:
+        raise ValueError("quantity must be positive")
+
+    conn = _connect_write()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        rows = conn.execute(
+            "SELECT Id, Quantity FROM Stock WHERE ProductId = ? ORDER BY Id",
+            (product_id,),
+        ).fetchall()
+
+        total_available = sum(r["Quantity"] for r in rows)
+        if total_available < quantity:
+            conn.rollback()
+            return False
+
+        remaining = quantity
+        for row in rows:
+            if remaining <= 0:
+                break
+            take = min(row["Quantity"], remaining)
+            if take <= 0:
+                continue
+            conn.execute(
+                "UPDATE Stock SET Quantity = Quantity - ? WHERE Id = ?",
+                (take, row["Id"]),
+            )
+            remaining -= take
+
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def increase_stock(product_id: int, quantity: int) -> None:
+    """
+    Add stock back. Only ever called by fidelityAPI to compensate a
+    redemption where the stock was already taken but the points side
+    then failed (e.g. a race where two redemptions land at once) - so
+    pos.db stays accurate even when the loyalty side has to back out.
+    """
+    if quantity <= 0:
+        raise ValueError("quantity must be positive")
+
+    conn = _connect_write()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT Id FROM Stock WHERE ProductId = ? ORDER BY Id LIMIT 1",
+            (product_id,),
+        ).fetchone()
+        if row is None:
+            raise LookupError(f"No Stock row found for product {product_id}")
+
+        conn.execute(
+            "UPDATE Stock SET Quantity = Quantity + ? WHERE Id = ?",
+            (quantity, row["Id"]),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
