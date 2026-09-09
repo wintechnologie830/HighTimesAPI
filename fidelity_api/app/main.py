@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import init_db, SessionLocal
-from app.routers import auth, customers, points, products, redemptions, sync
+from app.routers import auth, customers, points, products, redemptions, staff_auth, sync
 
 logger = logging.getLogger("fidelity_api.auto_sync")
 
@@ -29,6 +29,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(staff_auth.router)
 app.include_router(customers.router)
 app.include_router(products.router)
 app.include_router(points.router)

@@ -1,15 +1,10 @@
-import hashlib
-import hmac
-import os
-
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import general_client
 from app.models import CustomerCredential
+from app.security import hash_password as _hash_password, verify_password as _verify_password
 from app.services.points_service import get_or_create_account
-
-PBKDF2_ITERATIONS = 390_000
 
 
 class NameAlreadyRegisteredError(Exception):
@@ -18,17 +13,6 @@ class NameAlreadyRegisteredError(Exception):
 
 class InvalidCredentialsError(Exception):
     pass
-
-
-def _hash_password(password: str, salt: bytes | None = None) -> tuple[str, str]:
-    salt = salt or os.urandom(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PBKDF2_ITERATIONS)
-    return digest.hex(), salt.hex()
-
-
-def _verify_password(password: str, salt_hex: str, expected_hash_hex: str) -> bool:
-    digest_hex, _ = _hash_password(password, bytes.fromhex(salt_hex))
-    return hmac.compare_digest(digest_hex, expected_hash_hex)
 
 
 def register(db: Session, name: str, password: str, phone: str | None = None) -> dict:

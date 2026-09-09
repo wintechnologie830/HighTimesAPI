@@ -3,7 +3,13 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from app.models import CustomerCredential, LoyaltyAccount, Redemption, RedemptionStatus
+from app.models import (
+    CustomerCredential,
+    LoyaltyAccount,
+    Redemption,
+    RedemptionStatus,
+    StaffCredential,
+)
 
 # Excludes 0/O and 1/I/L - characters people commonly misread off a phone
 # screen at the counter.
@@ -68,9 +74,18 @@ def _customer_name(db: Session, aronium_customer_id: int) -> str | None:
     return cred.name if cred else None
 
 
+def _staff_name(db: Session, staff_id: int | None) -> str | None:
+    if staff_id is None:
+        return None
+    staff = db.query(StaffCredential).filter(StaffCredential.id == staff_id).first()
+    return staff.name if staff else None
+
+
 def to_out_dict(db: Session, redemption: Redemption) -> dict:
-    """Attaches the customer's aronium_customer_id + name for display,
-    since Redemption itself only stores the internal account_id."""
+    """Customer-safe view: attaches the customer's aronium_customer_id +
+    name for display, since Redemption itself only stores the internal
+    account_id. Includes staff_id but never a staff name - see the
+    comment on Redemption.staff_id in models.py."""
     account = db.query(LoyaltyAccount).filter(LoyaltyAccount.id == redemption.account_id).first()
     aronium_customer_id = account.aronium_customer_id if account else None
     return {
@@ -85,7 +100,17 @@ def to_out_dict(db: Session, redemption: Redemption) -> dict:
         "status": redemption.status.value,
         "date_created": redemption.date_created,
         "date_fulfilled": redemption.date_fulfilled,
+        "staff_id": redemption.staff_id,
     }
+
+
+def to_staff_out_dict(db: Session, redemption: Redemption) -> dict:
+    """Staff pickup desk view: same as to_out_dict, plus the resolved
+    staff name. Never send this dict's shape to the customer-facing
+    endpoint."""
+    out = to_out_dict(db, redemption)
+    out["staff_name"] = _staff_name(db, redemption.staff_id)
+    return out
 
 
 def get_by_code(db: Session, code: str) -> Redemption | None:
@@ -126,7 +151,38 @@ def list_pending(db: Session, search: str | None = None, limit: int = 100) -> li
     return query.order_by(Redemption.date_created.asc()).limit(limit).all()
 
 
-def fulfill(db: Session, redemption_id: int) -> Redemption:
+def list_fulfilled(db: Session, search: str | None = None, limit: int = 100) -> list[Redemption]:
+    """
+    The shop-wide pickup log: every completed pickup, regardless of which
+    staff member handled it, most recently completed first. Backs the
+    staff pickup desk's "All pickups" tab.
+    """
+    query = db.query(Redemption).filter(Redemption.status == RedemptionStatus.FULFILLED)
+    if search:
+        like = f"%{search.strip()}%"
+        query = query.join(LoyaltyAccount, Redemption.account_id == LoyaltyAccount.id).join(
+            CustomerCredential,
+            CustomerCredential.aronium_customer_id == LoyaltyAccount.aronium_customer_id,
+        ).filter(CustomerCredential.name.ilike(like))
+    return query.order_by(Redemption.date_fulfilled.desc()).limit(limit).all()
+
+
+def list_fulfilled_by_staff(db: Session, staff_id: int, limit: int = 100) -> list[Redemption]:
+    """
+    One staff member's own completed pickups, most recent first. Backs
+    the "My pickups" tab - scoped with `staff_id` from the signed-in
+    staff's own session token, never a value the client can pick.
+    """
+    return (
+        db.query(Redemption)
+        .filter(Redemption.status == RedemptionStatus.FULFILLED, Redemption.staff_id == staff_id)
+        .order_by(Redemption.date_fulfilled.desc())
+        .limit(limit)
+        .all()
+    )
+
+
+def fulfill(db: Session, redemption_id: int, staff_id: int) -> Redemption:
     redemption = db.query(Redemption).filter(Redemption.id == redemption_id).first()
     if redemption is None:
         raise RedemptionNotFoundError(f"No redemption with id {redemption_id}")
@@ -135,6 +191,7 @@ def fulfill(db: Session, redemption_id: int) -> Redemption:
 
     redemption.status = RedemptionStatus.FULFILLED
     redemption.date_fulfilled = datetime.utcnow()
+    redemption.staff_id = staff_id
     db.add(redemption)
     db.commit()
     db.refresh(redemption)

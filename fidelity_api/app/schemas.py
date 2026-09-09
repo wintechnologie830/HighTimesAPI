@@ -23,6 +23,25 @@ class AuthOut(BaseModel):
     name: str
 
 
+# ---------- Staff sign-in (separate from customer accounts, no Aronium link) ----------
+
+class StaffRegisterIn(BaseModel):
+    username: str
+    name: str
+    password: str = Field(min_length=8)
+
+
+class StaffLoginIn(BaseModel):
+    username: str
+    password: str
+
+
+class StaffAuthOut(BaseModel):
+    staff_id: int
+    name: str
+    token: str
+
+
 class CustomerOut(BaseModel):
     Id: int
     Code: str | None = None
@@ -116,6 +135,8 @@ class RedeemProductOut(TransactionOut):
 
 
 class RedemptionOut(BaseModel):
+    """Customer-facing view. Deliberately carries only staff_id (never a
+    name) - see the comment on Redemption.staff_id in models.py."""
     id: int
     code: str
     aronium_customer_id: int | None
@@ -127,6 +148,13 @@ class RedemptionOut(BaseModel):
     status: str
     date_created: datetime
     date_fulfilled: datetime | None
+    staff_id: int | None
+
+
+class RedemptionStaffOut(RedemptionOut):
+    """Staff-facing view: same fields, plus the actual staff member's
+    name so the pickup desk can show who handled a pickup."""
+    staff_name: str | None
 
 
 class SyncResultOut(BaseModel):

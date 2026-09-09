@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import (
-    Column, Integer, String, Float, DateTime, ForeignKey, Enum, UniqueConstraint
+    Column, Integer, String, Float, DateTime, ForeignKey, Enum, UniqueConstraint, Boolean
 )
 from sqlalchemy.orm import relationship
 
@@ -31,6 +31,44 @@ class CustomerCredential(Base):
     password_hash = Column(String, nullable=False)
     password_salt = Column(String, nullable=False)
     date_created = Column(DateTime, default=datetime.utcnow)
+
+
+class StaffCredential(Base):
+    """
+    Sign-in for staff (the pickup desk), completely separate from
+    CustomerCredential. Staff never go through Aronium/generalAPI to get
+    an account the way customers do at sign-up - there's no matching
+    "employee" record anywhere else, this table is the whole account.
+    Accounts can be self-registered from the pickup desk's "Create
+    account" tab, or provisioned by whoever runs the shop via
+    manage_staff.py - either way it's just a row here.
+    """
+    __tablename__ = "staff_credentials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True, nullable=False)
+    name = Column(String, nullable=False)  # shown to other staff, never to customers
+    password_hash = Column(String, nullable=False)
+    password_salt = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    date_created = Column(DateTime, default=datetime.utcnow)
+
+
+class StaffSession(Base):
+    """
+    Issued on staff login, required (as X-Staff-Token) to fulfill a
+    redemption. This is what lets fulfill() record *which* staff member
+    completed a pickup without staff having to re-type their password on
+    every single hand-off - they sign in once at the start of a shift.
+    """
+    __tablename__ = "staff_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    staff_id = Column(Integer, ForeignKey("staff_credentials.id"), nullable=False)
+    token = Column(String, unique=True, index=True, nullable=False)
+    date_created = Column(DateTime, default=datetime.utcnow)
+
+    staff = relationship("StaffCredential")
 
 
 class TransactionType(str, enum.Enum):
@@ -66,8 +104,14 @@ class Redemption(Base):
     status = Column(Enum(RedemptionStatus), default=RedemptionStatus.PENDING, nullable=False)
     date_created = Column(DateTime, default=datetime.utcnow)
     date_fulfilled = Column(DateTime, nullable=True)
+    # Which staff member marked it picked up. Nullable because it's only
+    # ever set at fulfill time - stays NULL for the life of a PENDING
+    # redemption. The customer app is only ever shown this raw id (never
+    # the name); the staff pickup desk resolves it to staff.name.
+    staff_id = Column(Integer, ForeignKey("staff_credentials.id"), nullable=True)
 
     account = relationship("LoyaltyAccount")
+    staff = relationship("StaffCredential")
 
 
 class LoyaltyAccount(Base):

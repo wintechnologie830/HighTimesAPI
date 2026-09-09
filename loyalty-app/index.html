@@ -510,14 +510,51 @@
     </div>
 
     <div id="staffTools" class="hidden">
+      <div id="staffLoginBox">
+        <div class="staff-section-title">Staff account</div>
+        <div class="mode-switch" style="margin-bottom:10px;">
+          <button class="active" id="staffTabSignin">Sign in</button>
+          <button id="staffTabSignup">Create account</button>
+        </div>
+
+        <div id="staffSigninForm">
+          <p class="page-sub" style="margin:0 0 10px;">Sign in with your own account so pickups you complete are attributed to you.</p>
+          <div class="staff-lookup-row">
+            <input id="staffUsernameInput" placeholder="Username" autocomplete="username" />
+            <input id="staffPasswordInput" type="password" placeholder="Password" autocomplete="current-password" />
+            <button class="btn" id="staffLoginBtn">Sign in</button>
+          </div>
+        </div>
+
+        <div id="staffSignupForm" class="hidden">
+          <p class="page-sub" style="margin:0 0 10px;">New here? Set up your own staff account - it's yours, no one else's.</p>
+          <div class="staff-lookup-row">
+            <input id="staffSignupUsernameInput" placeholder="Choose a username" autocomplete="username" />
+            <input id="staffSignupNameInput" placeholder="Your full name" />
+          </div>
+          <div class="staff-lookup-row">
+            <input id="staffSignupPasswordInput" type="password" placeholder="Password (min 8 characters)" autocomplete="new-password" minlength="8" />
+            <button class="btn" id="staffSignupBtn">Create account</button>
+          </div>
+        </div>
+      </div>
+      <div id="staffSignedInBox" class="hidden">
+        <p class="page-sub" style="margin:0 0 10px;">Signed in as <strong id="staffSignedInName">—</strong> · <button class="link-btn" id="staffLogoutBtn">sign out</button></p>
+      </div>
+
       <div class="staff-lookup-row">
         <input id="staffCodeInput" placeholder="Enter pickup code…" maxlength="6" />
         <button class="btn" id="staffCodeLookupBtn">Look up</button>
       </div>
       <div id="staffLookupResult"></div>
 
-      <div class="staff-section-title">Pending pickups</div>
-      <div class="search-row">
+      <div class="staff-section-title">Pickups</div>
+      <div class="mode-switch" style="margin-bottom:10px;">
+        <button class="active" id="staffTabPending">Pending</button>
+        <button id="staffTabMine">My pickups</button>
+        <button id="staffTabAll">All pickups</button>
+      </div>
+      <div class="search-row" id="staffSearchRow">
         <input id="staffSearchInput" placeholder="Search by customer name…" />
       </div>
       <div id="staffPendingList"></div>
@@ -544,6 +581,17 @@
       localStorage.removeItem('lp_customer');
       localStorage.removeItem('lp_customer_name');
     },
+  };
+
+  // Separate from the customer `store` above on purpose - a staff member
+  // signing in on a shared kiosk shouldn't touch the logged-in customer's
+  // session, and vice versa.
+  const staffSession = {
+    get token(){ return localStorage.getItem('lp_staff_token') || ''; },
+    set token(v){ v ? localStorage.setItem('lp_staff_token', v) : localStorage.removeItem('lp_staff_token'); },
+    get name(){ return localStorage.getItem('lp_staff_name') || ''; },
+    set name(v){ v ? localStorage.setItem('lp_staff_name', v) : localStorage.removeItem('lp_staff_name'); },
+    clear(){ this.token = ''; this.name = ''; },
   };
 
   let pointValueCurrency = 0.05; // fallback display ratio, refined once balance loads
@@ -747,6 +795,10 @@
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   }
+  function formatTimeHHMMSS(d){
+    const pad = n => String(n).padStart(2, '0');
+    return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
 
   // ---------- products ----------
   async function loadProducts(search){
@@ -893,10 +945,11 @@
   function renderPickupRow(r){
     const isPending = r.status === 'PENDING';
     const date = new Date(r.date_created);
+    const staffTag = (!isPending && r.staff_id) ? (' · staff #' + escapeHtml(String(r.staff_id))) : '';
     return '<div class="pickup-row">' +
       '<div class="pinfo">' +
         '<div class="pname">' + escapeHtml(r.quantity + ' × ' + r.product_name) + '</div>' +
-        '<div class="pmeta">' + date.toLocaleDateString() + ' · ' + formatPoints(r.points_spent) + ' pts</div>' +
+        '<div class="pmeta">' + date.toLocaleDateString() + ' ' + formatTimeHHMMSS(date) + ' · ' + formatPoints(r.points_spent) + ' pts' + staffTag + '</div>' +
       '</div>' +
       (isPending
         ? '<span class="pcode-tag mono">' + escapeHtml(r.code) + '</span>'
@@ -916,9 +969,12 @@
   const staffOverlay = document.getElementById('staffOverlay');
   const staffPinGate = document.getElementById('staffPinGate');
   const staffTools = document.getElementById('staffTools');
+  const staffLoginBox = document.getElementById('staffLoginBox');
+  const staffSignedInBox = document.getElementById('staffSignedInBox');
 
   document.getElementById('staffToggle').addEventListener('click', () => {
     staffOverlay.classList.remove('hidden');
+    refreshStaffLoginUI();
   });
   document.getElementById('staffClose').addEventListener('click', () => {
     staffOverlay.classList.add('hidden');
@@ -932,11 +988,100 @@
       await staffApi('/redemptions/staff/pending');
       staffPinGate.classList.add('hidden');
       staffTools.classList.remove('hidden');
-      refreshStaffPending('');
+      refreshStaffLoginUI();
+      setStaffQueueMode('pending');
     }catch(e){
       staffPin = '';
       toast('Wrong staff PIN', 'err');
     }
+  });
+
+  // ---------- individual staff sign-in / sign-up ----------
+  // Separate from the PIN above: the PIN just gets you into the back
+  // room, this is who's actually standing at the counter. Required
+  // before "Mark picked up" will work, so every fulfilled redemption is
+  // attributed to a real person.
+  function refreshStaffLoginUI(){
+    const signedIn = !!staffSession.token;
+    staffLoginBox.classList.toggle('hidden', signedIn);
+    staffSignedInBox.classList.toggle('hidden', !signedIn);
+    if(signedIn){
+      document.getElementById('staffSignedInName').textContent = staffSession.name;
+    }
+  }
+
+  const staffSigninForm = document.getElementById('staffSigninForm');
+  const staffSignupForm = document.getElementById('staffSignupForm');
+  const staffTabSignin = document.getElementById('staffTabSignin');
+  const staffTabSignup = document.getElementById('staffTabSignup');
+
+  staffTabSignin.addEventListener('click', () => {
+    staffTabSignin.classList.add('active');
+    staffTabSignup.classList.remove('active');
+    staffSigninForm.classList.remove('hidden');
+    staffSignupForm.classList.add('hidden');
+  });
+  staffTabSignup.addEventListener('click', () => {
+    staffTabSignup.classList.add('active');
+    staffTabSignin.classList.remove('active');
+    staffSignupForm.classList.remove('hidden');
+    staffSigninForm.classList.add('hidden');
+  });
+
+  document.getElementById('staffLoginBtn').addEventListener('click', async () => {
+    const username = document.getElementById('staffUsernameInput').value.trim();
+    const password = document.getElementById('staffPasswordInput').value;
+    if(!username || !password){ return; }
+    try{
+      const res = await api('/staff/auth/login', { method: 'POST', body: { username, password } });
+      staffSession.token = res.token;
+      staffSession.name = res.name;
+      document.getElementById('staffPasswordInput').value = '';
+      refreshStaffLoginUI();
+      refreshStaffQueue();
+      toast('Signed in as ' + res.name, 'ok');
+    }catch(e){
+      toast('Sign-in failed: ' + e.message, 'err');
+    }
+  });
+
+  document.getElementById('staffSignupBtn').addEventListener('click', async () => {
+    const username = document.getElementById('staffSignupUsernameInput').value.trim();
+    const name = document.getElementById('staffSignupNameInput').value.trim();
+    const password = document.getElementById('staffSignupPasswordInput').value;
+    if(!username || !name || !password){
+      toast('Fill in a username, your name, and a password.', 'err');
+      return;
+    }
+    if(password.length < 8){
+      toast('Password must be at least 8 characters.', 'err');
+      return;
+    }
+    try{
+      const res = await api('/staff/auth/register', { method: 'POST', body: { username, name, password } });
+      staffSession.token = res.token;
+      staffSession.name = res.name;
+      document.getElementById('staffSignupUsernameInput').value = '';
+      document.getElementById('staffSignupNameInput').value = '';
+      document.getElementById('staffSignupPasswordInput').value = '';
+      refreshStaffLoginUI();
+      refreshStaffQueue();
+      toast('Account created - signed in as ' + res.name, 'ok');
+    }catch(e){
+      toast('Could not create account: ' + e.message, 'err');
+    }
+  });
+
+  document.getElementById('staffLogoutBtn').addEventListener('click', async () => {
+    try{
+      await api('/staff/auth/logout', { method: 'POST', headers: { 'X-Staff-Token': staffSession.token } });
+    }catch(e){
+      // Token may already be gone server-side - clearing it locally is what matters.
+    }
+    staffSession.clear();
+    staffTabSignin.click();
+    refreshStaffLoginUI();
+    refreshStaffQueue();
   });
 
   document.getElementById('staffCodeLookupBtn').addEventListener('click', async () => {
@@ -956,10 +1101,13 @@
   function renderStaffRow(r){
     const isPending = r.status === 'PENDING';
     const date = new Date(r.date_created);
+    const pickedUpTag = isPending
+      ? ''
+      : (' · picked up by ' + escapeHtml(r.staff_name || 'unknown staff'));
     return '<div class="pickup-row">' +
       '<div class="pinfo">' +
         '<div class="pname">' + escapeHtml(r.customer_name || ('customer #' + r.aronium_customer_id)) + ' — ' + escapeHtml(r.quantity + ' × ' + r.product_name) + '</div>' +
-        '<div class="pmeta">code ' + escapeHtml(r.code) + ' · redeemed ' + date.toLocaleString() + '</div>' +
+        '<div class="pmeta">code ' + escapeHtml(r.code) + ' · redeemed ' + date.toLocaleDateString() + ' ' + formatTimeHHMMSS(date) + pickedUpTag + '</div>' +
       '</div>' +
       (isPending
         ? '<button class="btn small" data-fulfill="' + r.id + '">Mark picked up</button>'
@@ -970,13 +1118,20 @@
   function wireStaffFulfillButtons(container){
     container.querySelectorAll('[data-fulfill]').forEach(btn => {
       btn.addEventListener('click', async () => {
+        if(!staffSession.token){
+          toast('Sign in as staff first so this pickup can be attributed to you.', 'err');
+          return;
+        }
         btn.disabled = true;
         try{
-          await staffApi('/redemptions/staff/' + btn.getAttribute('data-fulfill') + '/fulfill', { method: 'POST' });
+          await staffApi('/redemptions/staff/' + btn.getAttribute('data-fulfill') + '/fulfill', {
+            method: 'POST',
+            headers: { 'X-Staff-Token': staffSession.token },
+          });
           toast('Marked as picked up', 'ok');
           document.getElementById('staffCodeInput').value = '';
           document.getElementById('staffLookupResult').innerHTML = '';
-          refreshStaffPending(document.getElementById('staffSearchInput').value.trim());
+          refreshStaffQueue();
         }catch(e){
           toast(e.message, 'err');
           btn.disabled = false;
@@ -985,14 +1140,59 @@
     });
   }
 
-  async function refreshStaffPending(search){
+  // Three views onto the same list widget: pending pickups (everyone's,
+  // unfulfilled), "mine" (this signed-in staff member's own completed
+  // pickups), and "all" (everyone's completed pickups - the shop-wide
+  // log). Each row already carries a resolved staff_name from the
+  // backend, so the desk always shows a real name, never a bare id.
+  let staffQueueMode = 'pending';
+  const staffTabPending = document.getElementById('staffTabPending');
+  const staffTabMine = document.getElementById('staffTabMine');
+  const staffTabAll = document.getElementById('staffTabAll');
+  const staffSearchRow = document.getElementById('staffSearchRow');
+
+  function setStaffQueueMode(mode){
+    staffQueueMode = mode;
+    staffTabPending.classList.toggle('active', mode === 'pending');
+    staffTabMine.classList.toggle('active', mode === 'mine');
+    staffTabAll.classList.toggle('active', mode === 'all');
+    // Searching by customer name only makes sense across everyone's
+    // pickups, not a single staff member's own short list.
+    staffSearchRow.classList.toggle('hidden', mode === 'mine');
+    refreshStaffQueue();
+  }
+  staffTabPending.addEventListener('click', () => setStaffQueueMode('pending'));
+  staffTabMine.addEventListener('click', () => setStaffQueueMode('mine'));
+  staffTabAll.addEventListener('click', () => setStaffQueueMode('all'));
+
+  async function refreshStaffQueue(){
     const list = document.getElementById('staffPendingList');
+    const search = document.getElementById('staffSearchInput').value.trim();
+
+    if(staffQueueMode === 'mine' && !staffSession.token){
+      list.innerHTML = '<div class="empty">Sign in to your staff account to see your own pickups.</div>';
+      return;
+    }
+
     list.innerHTML = '<div class="empty">loading…</div>';
     try{
-      const q = search ? ('?search=' + encodeURIComponent(search)) : '';
-      const redemptions = await staffApi('/redemptions/staff/pending' + q);
+      let redemptions;
+      if(staffQueueMode === 'pending'){
+        const q = search ? ('?search=' + encodeURIComponent(search)) : '';
+        redemptions = await staffApi('/redemptions/staff/pending' + q);
+      }else if(staffQueueMode === 'all'){
+        const q = search ? ('?search=' + encodeURIComponent(search)) : '';
+        redemptions = await staffApi('/redemptions/staff/fulfilled' + q);
+      }else{
+        redemptions = await staffApi('/redemptions/staff/mine', {
+          headers: { 'X-Staff-Token': staffSession.token },
+        });
+      }
       if(!redemptions.length){
-        list.innerHTML = '<div class="empty">Nothing pending.</div>';
+        const emptyMsg = staffQueueMode === 'pending' ? 'Nothing pending.'
+          : staffQueueMode === 'mine' ? "You haven't picked up any orders yet."
+          : 'No pickups yet.';
+        list.innerHTML = '<div class="empty">' + emptyMsg + '</div>';
         return;
       }
       list.innerHTML = redemptions.map(renderStaffRow).join('');
@@ -1003,9 +1203,9 @@
   }
 
   let staffSearchTimer;
-  document.getElementById('staffSearchInput').addEventListener('input', (ev) => {
+  document.getElementById('staffSearchInput').addEventListener('input', () => {
     clearTimeout(staffSearchTimer);
-    staffSearchTimer = setTimeout(() => refreshStaffPending(ev.target.value.trim()), 300);
+    staffSearchTimer = setTimeout(refreshStaffQueue, 300);
   });
 
   // ---------- mode switching ----------
