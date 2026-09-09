@@ -16,22 +16,13 @@ class InvalidCredentialsError(Exception):
 
 
 def register(db: Session, name: str, password: str, phone: str | None = None) -> dict:
-    """
-    Create a brand new customer: a real Customer row in Aronium (via
-    generalAPI, so the till/reports know them too), a local
-    CustomerCredential so they can sign back in, and an empty
-    LoyaltyAccount so their balance starts at 0.
-    """
     name = name.strip()
     existing = db.query(CustomerCredential).filter(CustomerCredential.name == name).first()
     if existing is not None:
         raise NameAlreadyRegisteredError(f"'{name}' is already registered")
 
-    # 1. Create the real Aronium customer first - if this fails (generalAPI
-    # down, etc.) we haven't written anything locally yet.
     customer = general_client.create_customer(name=name, email=None, phone=phone)
 
-    # 2. Store credentials locally, linked to that customer's Aronium id.
     password_hash, salt = _hash_password(password)
     credential = CustomerCredential(
         aronium_customer_id=customer["Id"],
@@ -46,7 +37,6 @@ def register(db: Session, name: str, password: str, phone: str | None = None) ->
         db.rollback()
         raise NameAlreadyRegisteredError(f"'{name}' is already registered")
 
-    # 3. Give them a loyalty account, starting at 0 points.
     get_or_create_account(db, customer["Id"])
 
     return {"aronium_customer_id": customer["Id"], "name": customer["Name"]}

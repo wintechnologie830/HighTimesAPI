@@ -42,22 +42,6 @@ _auto_sync_task: asyncio.Task | None = None
 
 
 async def _auto_sync_loop():
-    """
-    Runs sync.perform_sync() on a timer, forever, so that a purchase rung
-    up directly at the Aronium till - with a real customer selected via
-    the "Search customer" screen, e.g. clicking "ali" instead of leaving
-    it on "Walk-in customer" - earns that customer points automatically.
-    No one has to press a "sync" button for it to happen.
-
-    App purchases already earn points immediately (see points_service.
-    purchase_product), so most of what this loop finds on any given tick
-    is till sales; any app purchase it also sees again is just a no-op
-    thanks to the shared `sale:{document_id}` reference (see sync.py).
-
-    A single failed tick (e.g. generalAPI briefly unreachable, or Aronium
-    not running yet) is logged and retried on the next tick - it never
-    crashes the app or stops future ticks.
-    """
     while True:
         await asyncio.sleep(settings.auto_sync_interval_seconds)
         db = SessionLocal()

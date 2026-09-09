@@ -85,10 +85,6 @@ class RedeemPointsIn(BaseModel):
 
 
 class PurchaseProductIn(BaseModel):
-    """Buy a product with real money (not points). Price is fetched live
-    from generalAPI, points are earned on the total, and - unlike a plain
-    /points/earn call - the purchased quantity is taken out of Aronium's
-    real stock, the same way a points redemption is."""
     aronium_customer_id: int
     product_id: int
     quantity: int = Field(default=1, gt=0)
@@ -99,9 +95,6 @@ class PurchaseProductIn(BaseModel):
 
 
 class RedeemProductIn(BaseModel):
-    """Spend points on a specific product instead of a raw point amount.
-    The point cost is computed from the product's live price fetched from
-    generalAPI, so fidelityAPI never has to keep its own copy of prices."""
     aronium_customer_id: int
     product_id: int
     quantity: int = Field(default=1, gt=0)
@@ -126,8 +119,6 @@ class TransactionOut(BaseModel):
 
 
 class RedeemProductOut(TransactionOut):
-    """Same as TransactionOut, plus what the app needs to show the
-    customer their pickup code right after redeeming."""
     redemption_id: int
     redemption_code: str
     product_name: str
@@ -135,8 +126,6 @@ class RedeemProductOut(TransactionOut):
 
 
 class RedemptionOut(BaseModel):
-    """Customer-facing view. Deliberately carries only staff_id (never a
-    name) - see the comment on Redemption.staff_id in models.py."""
     id: int
     code: str
     aronium_customer_id: int | None
@@ -152,8 +141,6 @@ class RedemptionOut(BaseModel):
 
 
 class RedemptionStaffOut(RedemptionOut):
-    """Staff-facing view: same fields, plus the actual staff member's
-    name so the pickup desk can show who handled a pickup."""
     staff_name: str | None
 
 
@@ -168,5 +155,5 @@ class ProductOut(BaseModel):
     Code: str | None = None
     Price: float
     IsService: bool
-    Quantity: float = 0  # real live stock, from Aronium's own Stock table
-    Inventory: int | None = None  # fidelityAPI's local redeemable-stock counter
+    Quantity: float = 0 
+    Inventory: int | None = None

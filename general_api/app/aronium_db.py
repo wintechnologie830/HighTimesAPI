@@ -13,7 +13,6 @@ def _connect() -> sqlite3.Connection:
             f"Aronium database not found at '{db_path}'. "
             "Check ARONIUM_DB_PATH in general_api/.env."
         )
-    # uri=True + mode=ro => read-only connection, guarantees we can't write
     uri = f"file:{db_path.as_posix()}?mode=ro"
     conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
@@ -21,13 +20,6 @@ def _connect() -> sqlite3.Connection:
 
 
 def _connect_write() -> sqlite3.Connection:
-    """
-    Read-write connection. Only used by the stock functions below, which
-    are the ONE deliberate exception to "generalAPI never writes to
-    pos.db". Everything else in this module (and the whole project) still
-    only ever reads. Keeping the write path narrow and in this single file
-    is what lets us say elsewhere that nothing else can touch pos.db.
-    """
     db_path = Path(settings.aronium_db_path)
     if not db_path.exists():
         raise FileNotFoundError(
@@ -98,7 +90,6 @@ def get_customer_by_loyalty_card(card_number: str) -> dict | None:
 # ---------- Sales / documents ----------
 
 def list_customer_documents(customer_id: int, limit: int = 50) -> list[dict]:
-    """Purchase history for a customer, most recent first."""
     with aronium_connection() as conn:
         rows = conn.execute(
             """
@@ -116,10 +107,6 @@ def list_customer_documents(customer_id: int, limit: int = 50) -> list[dict]:
 
 
 def list_recent_documents(since_id: int = 0, limit: int = 100) -> list[dict]:
-    """
-    Used by fidelityAPI's /sync endpoint to find new sales that haven't been
-    turned into loyalty points yet (Id > since_id).
-    """
     with aronium_connection() as conn:
         rows = conn.execute(
             """
@@ -173,12 +160,6 @@ def get_product(product_id: int) -> dict | None:
 
 
 # ---------- Customer creation (another narrow, deliberate write) ----------
-#
-# Sign-up needs a real Aronium Customer row - not just something inside
-# fidelityAPI's own database - so the store's till and reports recognize
-# this person the same way they'd recognize anyone signed up in person.
-# No password or auth of any kind is stored here: that lives entirely in
-# fidelityAPI's loyalty.db, which is the only thing that needs it.
 
 def create_customer(name: str, email: str | None, phone: str | None) -> dict:
     conn = _connect_write()
@@ -205,14 +186,6 @@ def create_customer(name: str, email: str | None, phone: str | None) -> dict:
 
 
 # ---------- Sale recording (the other narrow, deliberate write) ----------
-#
-# A cash purchase made through the loyalty app is a real sale, so it needs
-# to show up in Aronium the way any till sale would - a Document (type
-# "Sales"), its DocumentItem line, and a Payment - so the Sales screen's
-# totals and "popular products" reflect it. This is folded into the same
-# atomic transaction as the stock reduction: either the whole sale is
-# recorded (stock down, document created, payment logged) or none of it
-# is, so pos.db never ends up with stock missing but no matching sale.
 
 def _next_document_number(conn, type_code: str) -> str:
     year = datetime.now().strftime("%y")
@@ -240,12 +213,6 @@ def record_sale(
     unit_price: float,
     payment_type_id: int = 1,
 ) -> dict | None:
-    """
-    Atomically: check + reduce Stock, then write a Sales Document +
-    DocumentItem + Payment for it. Returns None (no change made) if there
-    isn't enough stock. Mirrors reduce_stock()'s atomicity, just with the
-    bookkeeping rows added in the same transaction.
-    """
     if quantity <= 0:
         raise ValueError("quantity must be positive")
 
@@ -318,23 +285,8 @@ def record_sale(
         raise
     finally:
         conn.close()
-#
-# A loyalty redemption is a real sale of a real product - if we don't take
-# it out of Aronium's own Stock table, the register still thinks that unit
-# is available and someone can sell it again at the till. So this has to
-# be a genuine write to pos.db, not just a counter inside loyalty.db.
-#
-# It's kept here, behind these two narrow functions, so the guarantee
-# elsewhere ("only generalAPI can write, and only this one path") stays true.
 
 def reduce_stock(product_id: int, quantity: int) -> bool:
-    """
-    Atomically take `quantity` units of a product out of Stock, across
-    warehouses if it's split across more than one. Returns False (and
-    makes NO change) if there isn't enough total stock - this is what
-    stops overselling, so the check and the write happen in one
-    transaction, never as two separate steps.
-    """
     if quantity <= 0:
         raise ValueError("quantity must be positive")
 
@@ -374,12 +326,6 @@ def reduce_stock(product_id: int, quantity: int) -> bool:
 
 
 def increase_stock(product_id: int, quantity: int) -> None:
-    """
-    Add stock back. Only ever called by fidelityAPI to compensate a
-    redemption where the stock was already taken but the points side
-    then failed (e.g. a race where two redemptions land at once) - so
-    pos.db stays accurate even when the loyalty side has to back out.
-    """
     if quantity <= 0:
         raise ValueError("quantity must be positive")
 

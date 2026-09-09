@@ -13,9 +13,6 @@ router = APIRouter(
 
 @router.post("", response_model=CustomerOut, status_code=201)
 def create_customer(payload: CustomerCreateIn):
-    """Create a real Customer row in Aronium. Called once, at sign-up, from
-    fidelityAPI's /auth/register - no password or credential of any kind is
-    stored here, that lives entirely in fidelityAPI's own database."""
     return aronium_db.create_customer(payload.name, payload.email, payload.phone)
 
 

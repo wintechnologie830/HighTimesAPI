@@ -13,13 +13,6 @@ router = APIRouter(
 
 @router.post("", response_model=SaleOut)
 def record_sale(payload: SaleIn):
-    """
-    Called by fidelityAPI right when a cash purchase completes in the
-    loyalty app. Writes a real Sales Document + DocumentItem + Payment (so
-    Aronium's own Sales screen and "popular products" reflect it) and takes
-    the quantity out of Stock, in one atomic transaction. Returns 409 if
-    there isn't enough stock - in that case nothing was written.
-    """
     result = aronium_db.record_sale(
         customer_id=payload.customer_id,
         product_id=payload.product_id,

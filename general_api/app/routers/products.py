@@ -26,12 +26,6 @@ def get_product(product_id: int):
 
 @router.post("/{product_id}/reduce-stock", response_model=StockAdjustOut)
 def reduce_stock(product_id: int, payload: StockAdjustIn):
-    """
-    Called by fidelityAPI right when a sale (e.g. a points redemption) is
-    completed, so Aronium's real Stock goes down immediately - not just a
-    counter inside loyalty.db. Atomic check-then-write: if there isn't
-    enough stock, nothing is changed and we return 409.
-    """
     product = aronium_db.get_product(product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -44,11 +38,6 @@ def reduce_stock(product_id: int, payload: StockAdjustIn):
 
 @router.post("/{product_id}/increase-stock", response_model=StockAdjustOut)
 def increase_stock(product_id: int, payload: StockAdjustIn):
-    """
-    Compensating write, used by fidelityAPI to put stock back if it took it
-    for a redemption that then failed on the points side. Not meant for
-    general restocking - that stays inside Aronium itself.
-    """
     product = aronium_db.get_product(product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")

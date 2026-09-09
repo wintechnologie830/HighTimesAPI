@@ -6,10 +6,6 @@ from app.database import get_db
 from app.schemas import StaffAuthOut, StaffLoginIn, StaffRegisterIn
 from app.services import staff_auth_service
 
-# Staff sign-in itself only needs the same mobile API key every other
-# fidelityAPI endpoint needs (same threat model as /auth/login for
-# customers) - it's what *issues* the X-Staff-Token that the redemption
-# staff_router's fulfill endpoint then requires.
 router = APIRouter(
     prefix="/staff/auth",
     tags=["staff"],

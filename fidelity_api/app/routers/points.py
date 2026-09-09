@@ -25,7 +25,6 @@ router = APIRouter(
 
 @router.get("/{aronium_customer_id}", response_model=PointsBalanceOut)
 def get_balance(aronium_customer_id: int, db: Session = Depends(get_db)):
-    """Each customer's balance is their own - never shared or pooled."""
     account = points_service.get_balance(db, aronium_customer_id)
     return PointsBalanceOut(
         aronium_customer_id=account.aronium_customer_id,
@@ -55,8 +54,6 @@ def earn(payload: EarnPointsIn, db: Session = Depends(get_db)):
 
 @router.post("/purchase", response_model=TransactionOut)
 def purchase(payload: PurchaseProductIn, db: Session = Depends(get_db)):
-    """Buy a product with cash: earns points on the total AND takes the
-    quantity out of real stock, same as a points redemption does."""
     try:
         return points_service.purchase_product(
             db,
@@ -74,7 +71,6 @@ def purchase(payload: PurchaseProductIn, db: Session = Depends(get_db)):
 
 @router.post("/redeem", response_model=TransactionOut)
 def redeem(payload: RedeemPointsIn, db: Session = Depends(get_db)):
-    """Redeem a raw number of points (e.g. for a cash-value discount)."""
     try:
         return points_service.redeem_points(
             db,
@@ -91,10 +87,6 @@ def redeem(payload: RedeemPointsIn, db: Session = Depends(get_db)):
 
 @router.post("/redeem-product", response_model=RedeemProductOut)
 def redeem_product(payload: RedeemProductIn, db: Session = Depends(get_db)):
-    """Spend points directly on a product. Price is fetched live from
-    generalAPI, so it always matches what's in Aronium right now. Points
-    and stock are taken immediately; the response's redemption_code is
-    what the customer shows staff at pickup to claim the product."""
     try:
         return points_service.redeem_points_for_product(
             db,
@@ -112,7 +104,6 @@ def redeem_product(payload: RedeemProductIn, db: Session = Depends(get_db)):
 
 @router.post("/adjust", response_model=TransactionOut)
 def adjust(payload: AdjustPointsIn, db: Session = Depends(get_db)):
-    """Manual staff correction, e.g. goodwill points or fixing a mistake."""
     return points_service.adjust_points(
         db,
         aronium_customer_id=payload.aronium_customer_id,

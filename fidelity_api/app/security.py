@@ -1,8 +1,3 @@
-"""
-Password hashing shared by CustomerCredential (auth_service) and
-StaffCredential (staff_auth_service) - same PBKDF2 scheme, one place to
-get it right instead of two copies drifting apart.
-"""
 import hashlib
 import hmac
 import os

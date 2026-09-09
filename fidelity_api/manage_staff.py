@@ -1,19 +1,3 @@
-"""
-Admin CLI for staff login accounts. Staff accounts are provisioned here,
-not through any self-registration endpoint - unlike customers, who sign
-themselves up in the app, staff don't get an Aronium record at all and
-there's no public "become a staff member" flow.
-
-Run from the fidelity_api/ directory, with your venv active. If you're
-upgrading an existing install, run migrate_staff_login.py first.
-
-Usage:
-    python manage_staff.py add <username> "<Full Name>"
-    python manage_staff.py list
-    python manage_staff.py deactivate <username>
-    python manage_staff.py activate <username>
-    python manage_staff.py reset-password <username>
-"""
 import argparse
 import getpass
 import sys
@@ -120,7 +104,7 @@ def cmd_reset_password(args):
 
 
 def main():
-    init_db()  # harmless if tables already exist; ensures a fresh loyalty.db works too
+    init_db()
 
     parser = argparse.ArgumentParser(description="Manage fidelityAPI staff login accounts")
     subparsers = parser.add_subparsers(dest="command", required=True)

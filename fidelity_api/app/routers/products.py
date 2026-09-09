@@ -18,7 +18,6 @@ router = APIRouter(
 def list_products(search: str | None = Query(default=None), db: Session = Depends(get_db)):
     products = general_client.list_products(search=search)
     
-    # Attach inventory from fidelity's own database
     for product in products:
         product["Inventory"] = inventory.get_inventory(db, product["Id"])
     

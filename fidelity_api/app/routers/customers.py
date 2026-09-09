@@ -10,11 +10,6 @@ router = APIRouter(
     dependencies=[Depends(require_mobile_api_key)],
 )
 
-# NOTE: every function here calls generalAPI over HTTP - this router never
-# opens any database file directly. That's what keeps pos.db out of reach
-# even if this whole service were compromised.
-
-
 @router.get("", response_model=list[CustomerOut])
 def list_customers(search: str | None = Query(default=None)):
     return general_client.list_customers(search=search)

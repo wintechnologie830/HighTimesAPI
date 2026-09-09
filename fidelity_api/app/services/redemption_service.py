@@ -11,8 +11,6 @@ from app.models import (
     StaffCredential,
 )
 
-# Excludes 0/O and 1/I/L - characters people commonly misread off a phone
-# screen at the counter.
 _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 _CODE_LENGTH = 6
 
@@ -31,8 +29,6 @@ def _generate_unique_code(db: Session) -> str:
         exists = db.query(Redemption).filter(Redemption.code == code).first()
         if not exists:
             return code
-    # Astronomically unlikely with a 32^6 keyspace, but fail loudly rather
-    # than silently hand out a colliding code.
     raise RuntimeError("Could not generate a unique redemption code")
 
 
@@ -44,12 +40,6 @@ def create_redemption(
     quantity: int,
     points_spent: float,
 ) -> Redemption:
-    """
-    Called right after points_service.redeem_points_for_product() takes the
-    points and stock. This row - and the code on it - is what lets the
-    customer prove at pickup that they already paid with points, and lets
-    staff mark it handed over.
-    """
     redemption = Redemption(
         account_id=account_id,
         product_id=product_id,
@@ -82,10 +72,6 @@ def _staff_name(db: Session, staff_id: int | None) -> str | None:
 
 
 def to_out_dict(db: Session, redemption: Redemption) -> dict:
-    """Customer-safe view: attaches the customer's aronium_customer_id +
-    name for display, since Redemption itself only stores the internal
-    account_id. Includes staff_id but never a staff name - see the
-    comment on Redemption.staff_id in models.py."""
     account = db.query(LoyaltyAccount).filter(LoyaltyAccount.id == redemption.account_id).first()
     aronium_customer_id = account.aronium_customer_id if account else None
     return {
@@ -105,9 +91,6 @@ def to_out_dict(db: Session, redemption: Redemption) -> dict:
 
 
 def to_staff_out_dict(db: Session, redemption: Redemption) -> dict:
-    """Staff pickup desk view: same as to_out_dict, plus the resolved
-    staff name. Never send this dict's shape to the customer-facing
-    endpoint."""
     out = to_out_dict(db, redemption)
     out["staff_name"] = _staff_name(db, redemption.staff_id)
     return out
@@ -136,11 +119,6 @@ def list_for_customer(db: Session, aronium_customer_id: int, limit: int = 50) ->
 
 
 def list_pending(db: Session, search: str | None = None, limit: int = 100) -> list[Redemption]:
-    """
-    Option 3's staff queue: everyone with an unfulfilled redemption,
-    newest first, so the cashier can find someone by name even if they
-    forgot / can't show their code.
-    """
     query = db.query(Redemption).filter(Redemption.status == RedemptionStatus.PENDING)
     if search:
         like = f"%{search.strip()}%"
@@ -152,11 +130,6 @@ def list_pending(db: Session, search: str | None = None, limit: int = 100) -> li
 
 
 def list_fulfilled(db: Session, search: str | None = None, limit: int = 100) -> list[Redemption]:
-    """
-    The shop-wide pickup log: every completed pickup, regardless of which
-    staff member handled it, most recently completed first. Backs the
-    staff pickup desk's "All pickups" tab.
-    """
     query = db.query(Redemption).filter(Redemption.status == RedemptionStatus.FULFILLED)
     if search:
         like = f"%{search.strip()}%"
@@ -168,11 +141,6 @@ def list_fulfilled(db: Session, search: str | None = None, limit: int = 100) -> 
 
 
 def list_fulfilled_by_staff(db: Session, staff_id: int, limit: int = 100) -> list[Redemption]:
-    """
-    One staff member's own completed pickups, most recent first. Backs
-    the "My pickups" tab - scoped with `staff_id` from the signed-in
-    staff's own session token, never a value the client can pick.
-    """
     return (
         db.query(Redemption)
         .filter(Redemption.status == RedemptionStatus.FULFILLED, Redemption.staff_id == staff_id)

@@ -40,7 +40,6 @@ def _post(path: str, json: dict | None = None) -> httpx.Response:
         )
     if resp.status_code == 404:
         raise HTTPException(status_code=404, detail=resp.json().get("detail", "Not found"))
-    # 409 (not enough stock) is handled by the caller, not raised here.
     if resp.status_code not in (200, 409):
         resp.raise_for_status()
     return resp
@@ -78,8 +77,6 @@ def list_recent_documents(since_id: int = 0, limit: int = 200) -> list[dict]:
 
 
 def create_customer(name: str, email: str | None, phone: str | None) -> dict:
-    """Create a real Aronium customer at sign-up. No password lives here or
-    in pos.db - fidelityAPI's own database is the only thing that has it."""
     return _post("/customers", json={"name": name, "email": email, "phone": phone}).json()
 
 
@@ -90,12 +87,6 @@ def record_sale(
     unit_price: float,
     payment_type_id: int = 1,
 ) -> dict | None:
-    """
-    Ask generalAPI to write a real Sales Document (+ line item + payment)
-    for a cash purchase, and take the stock out at the same time. Returns
-    None if generalAPI reports there wasn't enough stock (409) - nothing
-    was changed on the pos.db side in that case.
-    """
     resp = _post(
         "/sales",
         json={
@@ -112,19 +103,9 @@ def record_sale(
 
 
 def reduce_stock(product_id: int, quantity: int) -> bool:
-    """
-    Ask generalAPI to take `quantity` units out of Aronium's real Stock for
-    this product, right when a sale (points redemption) completes.
-    Returns False if generalAPI reports there wasn't enough stock - in
-    that case nothing was changed on the pos.db side.
-    """
     resp = _post(f"/products/{product_id}/reduce-stock", json={"quantity": quantity})
     return resp.status_code == 200
 
 
 def increase_stock(product_id: int, quantity: int) -> None:
-    """
-    Compensating call: put stock back via generalAPI. Only used when stock
-    was already taken for a redemption that then failed on the points side.
-    """
     _post(f"/products/{product_id}/increase-stock", json={"quantity": quantity})

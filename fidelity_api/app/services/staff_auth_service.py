@@ -36,13 +36,6 @@ def _generate_token() -> str:
 
 
 def register(db: Session, username: str, name: str, password: str) -> dict:
-    """
-    Self-service staff sign-up. Deliberately still has nothing to do with
-    Aronium or CustomerCredential - it just writes a StaffCredential row
-    in loyalty.db, same as it would if an admin had created the account
-    by hand. Logs the new account straight in, same as customer register()
-    does, so there's one less step before they can use the pickup desk.
-    """
     username = username.strip()
     name = name.strip()
     existing = db.query(StaffCredential).filter(StaffCredential.username == username).first()
@@ -72,13 +65,6 @@ def register(db: Session, username: str, name: str, password: str) -> dict:
 
 
 def login(db: Session, username: str, password: str) -> dict:
-    """
-    Verifies a staff member's own username/password (never Aronium, never
-    the shared staff PIN) and hands back a session token. The token - not
-    the staff id - is what the pickup desk sends back on every staff
-    action from then on, so a customer poking at the network tab can't
-    just guess a low integer and impersonate a staff member.
-    """
     username = username.strip()
     staff = db.query(StaffCredential).filter(StaffCredential.username == username).first()
     if (

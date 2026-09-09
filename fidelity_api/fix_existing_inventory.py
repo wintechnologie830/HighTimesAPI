@@ -1,11 +1,3 @@
-"""
-One-off fix: your existing loyalty.db has product_inventory rows that were
-created with the old hardcoded default of 10, instead of your real Aronium
-stock. Run this ONCE after deploying the code fix to correct them.
-
-Usage (from the fidelity_api/ directory, with your venv active):
-    python fix_existing_inventory.py
-"""
 from app.database import SessionLocal
 from app.models import ProductInventory
 from app import general_client
