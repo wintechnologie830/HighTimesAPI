@@ -1,112 +1,95 @@
 # High Times — Loyalty App
 
-Three pieces, same architecture as before (see each service's own docstrings
-for the full reasoning):
+Trois composants, avec la même architecture qu'auparavant (voir les docstrings de chaque service pour le raisonnement complet) :
 
-```
+```text
 loyalty-app (browser)
         │  (X-API-Key: FIDELITY_API_KEY)
         ▼
    fidelity_api  ──────────────►  general_api  ────►  pos.db (Aronium)
         │        (X-API-Key: GENERAL_API_KEY)
         ▼
-   loyalty.db (points, accounts, transactions, sign-in credentials)
+   loyalty.db (points, comptes, transactions, identifiants de connexion)
 ```
 
-- **general_api** is the only thing that ever opens `pos.db`. Read-only for
-  everything except three narrow, atomic writes: taking stock out/putting it
-  back (`/products/{id}/reduce-stock`, `/increase-stock`), recording a real
-  sale (`POST /sales` — Document + DocumentItem + Payment, in the same
-  transaction as the stock reduction), and creating a customer at sign-up
-  (`POST /customers`). It must stay bound to `127.0.0.1`.
-- **fidelity_api** is the only thing the browser talks to. It never sees
-  `pos.db`'s path. New in this version: `/auth/register` and `/auth/login`,
-  backed by a `CustomerCredential` table that lives only in `loyalty.db` —
-  Aronium's own `Customer` table has no password column and never gets one.
-  Buying a product now calls `general_api`'s `/sales` endpoint, so a
-  purchase shows up on Aronium's own Sales screen and counts toward
-  "popular products", not just the loyalty side. Also new: individual
-  staff login (`StaffCredential` / `/staff/auth/login`), separate from
-  both the customer accounts above and from Aronium entirely — see
-  "Staff accounts" below.
-- **loyalty-app** is a single static `index.html` — no build step. Sign up
-  or sign in, then buy products (earns points, is a real Aronium sale) or
-  redeem points for products. Each product card shows Aronium's live stock
-  count.
+* **general_api** est le seul service qui ouvre `pos.db`. Il fonctionne en lecture seule pour tout, à l'exception de trois écritures atomiques et limitées : retirer/remettre du stock (`/products/{id}/reduce-stock`, `/increase-stock`), enregistrer une vraie vente (`POST /sales` — `Document` + `DocumentItem` + `Payment`, dans la même transaction que la réduction du stock), et créer un client lors de l'inscription (`POST /customers`). Il doit rester lié à `127.0.0.1`.
 
-## Running it
+* **fidelity_api** est le seul service auquel le navigateur communique directement. Il n'accède jamais au chemin de `pos.db`. Nouveauté dans cette version : `/auth/register` et `/auth/login`, qui utilisent une table `CustomerCredential` située uniquement dans `loyalty.db` — la table `Customer` d'Aronium ne possède aucune colonne de mot de passe et n'en aura jamais.
 
-### 1. general_api (on the machine running Aronium)
+  L'achat d'un produit utilise maintenant l'endpoint `/sales` de **general_api`. Ainsi, un achat apparaît dans l'écran Sales d'Aronium et est pris en compte dans les statistiques de « popular products », plutôt que d'être enregistré uniquement du côté de la fidélité.
+
+  Nouveauté également : une connexion individuelle pour les employés (`StaffCredential` / `/staff/auth/login`), complètement séparée des comptes clients et d'Aronium — voir la section « Staff accounts » ci-dessous.
+
+* **loyalty-app** est un unique fichier statique `index.html` — aucune étape de build. L'utilisateur s'inscrit ou se connecte, puis peut acheter des produits (ce qui rapporte des points et constitue une vraie vente dans Aronium) ou échanger ses points contre des produits. Chaque carte de produit affiche le stock actuel provenant directement d'Aronium.
+
+## Exécution
+
+### 1. general_api (sur la machine qui exécute Aronium)
+
 ```bash
 cd general_api
-cp .env.example .env   # set ARONIUM_DB_PATH to your pos.db, pick a GENERAL_API_KEY
+cp .env.example .env   # définir ARONIUM_DB_PATH vers votre pos.db et choisir un GENERAL_API_KEY
 pip install -r requirements.txt
 uvicorn app.main:app --host 127.0.0.1 --port 8001
 ```
 
-### 2. fidelity_api (same machine or another on the local network)
+### 2. fidelity_api (sur la même machine ou une autre machine du réseau local)
+
 ```bash
 cd fidelity_api
-cp .env.example .env   # GENERAL_API_KEY must match general_api's; pick a FIDELITY_API_KEY
+cp .env.example .env   # GENERAL_API_KEY doit correspondre à celui de general_api; choisir un FIDELITY_API_KEY
 pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 ### 3. loyalty-app
-Just open `loyalty-app/index.html` in a browser (or serve it from anywhere —
-it only needs to be able to reach `fidelity_api` over HTTP; CORS is already
-open on the API). Under "connection settings", set the fidelity_api base
-URL and its `X-API-Key`, then sign up or sign in.
+
+Il suffit d'ouvrir `loyalty-app/index.html` dans un navigateur (ou de le servir depuis n'importe quel emplacement).
+
+Le fichier doit uniquement pouvoir communiquer avec **fidelity_api** via HTTP ; le CORS est déjà ouvert sur l'API.
+
+Dans les « connection settings », définir l'URL de base de **fidelity_api** ainsi que son `X-API-Key`, puis s'inscrire ou se connecter.
 
 ### 4. Staff accounts
-Staff sign up for their own account right on the pickup desk panel (a
-"Create account" tab next to "Sign in") - no Aronium record, no link to
-customer accounts, just a username/name/password stored in `loyalty.db`.
-If you'd rather provision accounts yourself instead, `manage_staff.py`
-still works the same way:
+
+Les employés créent leur propre compte directement depuis le pickup desk panel, dans un onglet « Create account » situé à côté de « Sign in ».
+
+Aucun enregistrement Aronium n'est créé et aucun lien n'existe avec les comptes clients. Seuls un username, un nom et un password sont stockés dans `loyalty.db`.
+
+Si vous préférez créer les comptes vous-même, `manage_staff.py` fonctionne toujours de la même manière :
 
 ```bash
 cd fidelity_api
-# upgrading an existing loyalty.db? run this once first:
+
+# si vous mettez à niveau un loyalty.db existant, exécuter ceci une seule fois :
 python migrate_staff_login.py
 
-python manage_staff.py add jdoe "Jane Doe"     # prompts for a password
+python manage_staff.py add jdoe "Jane Doe"     # demande un mot de passe
 python manage_staff.py list
-python manage_staff.py deactivate jdoe         # revoke without deleting
+python manage_staff.py deactivate jdoe         # désactive le compte sans le supprimer
 python manage_staff.py reset-password jdoe
 ```
 
-At the pickup desk, staff still enter the shared "Staff PIN" to open the
-panel at all, then sign in (or sign up) individually before "Mark picked
-up" will work — that's what lets a redemption record *which* staff
-member handed the item over, not just that the PIN was known. Customers
-only ever see a staff **id** number on their own "My pickups" screen;
-the actual name is only shown on the staff pickup desk.
+Au pickup desk, les employés doivent toujours entrer le « Staff PIN » partagé pour accéder au panel. Ils doivent ensuite se connecter ou créer leur compte individuellement avant que l'action « Mark picked up » puisse être utilisée.
 
-## What's new since the last version
+Cela permet d'enregistrer **quel employé** a remis l'article au client, plutôt que de savoir uniquement que le PIN partagé était connu.
 
-- Sign up / sign in, backed by `/auth/register` and `/auth/login`.
-- Individual staff accounts (`/staff/auth/register`, `/staff/auth/login`),
-  on top of the existing shared staff PIN — see "Staff accounts" above.
-  Every fulfilled redemption now records which staff member completed it.
-- "My pickups" and the staff pickup desk both show the exact time
-  (HH:MM:SS) alongside the date, not just the date.
-- Live inventory counts shown on every product card.
-- Buying a product (not just redeeming with points) now takes real stock
-  out of Aronium *and* writes a real Sales document, so it shows up in
-  Aronium's reporting the same way a till sale would.
+Les clients voient uniquement un **id** de staff sur leur écran « My pickups » ; le nom réel de l'employé est affiché uniquement sur le staff pickup desk.
 
-## Known trade-offs, worth revisiting before real production use
+## Nouveautés depuis la dernière version
 
-- `record_sale()` always uses `UserId=1` and `WarehouseId=1` as a fixed
-  "web kiosk" identity — fine for a single-till, single-warehouse setup,
-  worth revisiting otherwise.
-- If this app runs alongside a real till that *also* rings up the same
-  transaction, you'd double-count the sale — decide which system is the
-  source of truth for a given purchase.
-- Sign-in has no session token/expiry; the browser just remembers the
-  customer id after a successful login. Fine for a single-user kiosk-style
-  app, not meant to be internet-facing as-is.
-- Staff sign-in tokens (`StaffSession`) similarly never expire on their
-  own — sign out is manual (the "sign out" link on the pickup desk), or
-  `deactivate` the account via `manage_staff.py` if a device is lost.
+* Inscription / connexion des clients, avec `/auth/register` et `/auth/login`.
+* Comptes individuels pour les employés (`/staff/auth/register`, `/staff/auth/login`), en plus du Staff PIN partagé existant — voir « Staff accounts » ci-dessus. Chaque redemption complétée enregistre maintenant l'employé qui l'a effectuée.
+* « My pickups » et le staff pickup desk affichent maintenant l'heure exacte (`HH:MM:SS`) avec la date, plutôt que la date uniquement.
+* Affichage du stock en temps réel sur chaque carte de produit.
+* L'achat d'un produit (et pas uniquement son redemption avec des points) retire maintenant réellement le stock d'Aronium et crée un véritable document de vente dans Aronium. Il apparaît donc dans les rapports Aronium de la même manière qu'une vente effectuée directement à la caisse.
+
+## Compromis connus à revoir avant une utilisation en production
+
+* `record_sale()` utilise toujours `UserId=1` et `WarehouseId=1` comme identité fixe pour le « web kiosk ». Cela convient à une configuration avec une seule caisse et un seul entrepôt, mais devrait être revu pour une configuration plus complexe.
+
+* Si cette application fonctionne en parallèle avec une vraie caisse qui enregistre également la même transaction, la vente sera comptabilisée deux fois. Il faut donc déterminer quel système constitue la **source of truth** pour chaque achat.
+
+* La connexion client ne possède actuellement aucun session token ni expiration. Après une connexion réussie, le navigateur conserve simplement l'identifiant du client. Cela convient à une application de type kiosk utilisée par un seul utilisateur, mais cette approche n'est pas destinée à une application exposée directement sur Internet.
+
+* Les tokens de connexion des employés (`StaffSession`) n'expirent pas automatiquement non plus. La déconnexion est manuelle via le lien « sign out » du pickup desk, ou le compte peut être désactivé avec `manage_staff.py` si un appareil est perdu.
