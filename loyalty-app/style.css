@@ -357,6 +357,7 @@ p.page-sub{
 .pickup-row{
   display:flex; justify-content:space-between; align-items:center; gap:12px;
   padding: 13px 16px; border: 1px solid var(--line);
+  border-left: 3px solid var(--turf);
   border-radius: 5px;
   margin-bottom: 10px; background:var(--card);
 }

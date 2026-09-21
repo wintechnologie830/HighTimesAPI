@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from app import general_client
 from app.config import settings
 from app.models import LoyaltyAccount, PointsTransaction, TransactionType
-from app.services import inventory
 from app.services import redemption_service
 
 
@@ -102,7 +101,9 @@ def purchase_product(
         note=note or default_note,
     )
 
-    inventory.reduce_inventory(db, product_id, quantity)
+    # Stock was already reduced in Aronium by record_sale() above, and the
+    # redeemable count shown to customers is read live from that same
+    # Aronium quantity (see services/inventory.py) - nothing else to update.
 
     return tx
 
@@ -169,14 +170,16 @@ def redeem_points_for_product(
             db,
             aronium_customer_id=aronium_customer_id,
             points=points_needed,
-            reference=f"product:{product_id}:{quantity}:{int(datetime.utcnow().timestamp())}",
+            reference=f"product:{product_id}:{quantity}:{int(datetime.now().timestamp())}",
             note=note,
         )
     except (InsufficientPointsError, DuplicateReferenceError):
         general_client.increase_stock(product_id, quantity)
         raise
 
-    inventory.reduce_inventory(db, product_id, quantity)
+    # Stock was already reduced in Aronium by reduce_stock() above, and the
+    # redeemable count shown to customers is read live from that same
+    # Aronium quantity (see services/inventory.py) - nothing else to update.
 
     redemption = redemption_service.create_redemption(
         db,

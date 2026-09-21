@@ -9,12 +9,24 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 
 class ProductInventory(Base):
+    """
+    DEPRECATED - no longer read or written anywhere in the app.
+
+    Redeemable stock used to be tracked here as its own counter, separate
+    from Aronium's real stock quantity, which let it drift out of sync
+    (see services/inventory.py for the full explanation). Redeemable stock
+    is now always read live from Aronium instead, so this table is unused.
+
+    The class/table is kept only so existing deployments don't break on
+    startup; it's safe to drop once you've confirmed nothing else needs it.
+    """
+
     __tablename__ = "product_inventory"
 
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, unique=True, index=True, nullable=False)
     quantity = Column(Integer, default=0, nullable=False)
-    date_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    date_updated = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 class CustomerCredential(Base):
     __tablename__ = "customer_credentials"
@@ -24,7 +36,7 @@ class CustomerCredential(Base):
     name = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
     password_salt = Column(String, nullable=False)
-    date_created = Column(DateTime, default=datetime.utcnow)
+    date_created = Column(DateTime, default=datetime.now)
 
 
 class StaffCredential(Base):
@@ -36,7 +48,7 @@ class StaffCredential(Base):
     password_hash = Column(String, nullable=False)
     password_salt = Column(String, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
-    date_created = Column(DateTime, default=datetime.utcnow)
+    date_created = Column(DateTime, default=datetime.now)
 
 
 class StaffSession(Base):
@@ -45,7 +57,7 @@ class StaffSession(Base):
     id = Column(Integer, primary_key=True, index=True)
     staff_id = Column(Integer, ForeignKey("staff_credentials.id"), nullable=False)
     token = Column(String, unique=True, index=True, nullable=False)
-    date_created = Column(DateTime, default=datetime.utcnow)
+    date_created = Column(DateTime, default=datetime.now)
 
     staff = relationship("StaffCredential")
 
@@ -72,7 +84,7 @@ class Redemption(Base):
     points_spent = Column(Float, nullable=False)
     code = Column(String, unique=True, index=True, nullable=False)
     status = Column(Enum(RedemptionStatus), default=RedemptionStatus.PENDING, nullable=False)
-    date_created = Column(DateTime, default=datetime.utcnow)
+    date_created = Column(DateTime, default=datetime.now)
     date_fulfilled = Column(DateTime, nullable=True)
     staff_id = Column(Integer, ForeignKey("staff_credentials.id"), nullable=True)
 
@@ -86,8 +98,8 @@ class LoyaltyAccount(Base):
     id = Column(Integer, primary_key=True, index=True)
     aronium_customer_id = Column(Integer, unique=True, index=True, nullable=False)
     points_balance = Column(Float, default=0.0, nullable=False)
-    date_created = Column(DateTime, default=datetime.utcnow)
-    date_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    date_created = Column(DateTime, default=datetime.now)
+    date_updated = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     transactions = relationship(
         "PointsTransaction", back_populates="account", cascade="all, delete-orphan"
@@ -106,7 +118,7 @@ class PointsTransaction(Base):
     points = Column(Float, nullable=False)
     reference = Column(String, nullable=True)
     note = Column(String, nullable=True)
-    date_created = Column(DateTime, default=datetime.utcnow)
+    date_created = Column(DateTime, default=datetime.now)
 
     account = relationship("LoyaltyAccount", back_populates="transactions")
 

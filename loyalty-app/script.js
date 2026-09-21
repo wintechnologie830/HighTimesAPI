@@ -376,11 +376,18 @@
   function renderPickupRow(r){
     const isPending = r.status === 'PENDING';
     const date = new Date(r.date_created);
-    const staffTag = (!isPending && r.staff_id) ? (' · staff #' + escapeHtml(String(r.staff_id))) : '';
+    let pickedUpMeta = '';
+    if(!isPending && r.date_fulfilled){
+      const fulfilledDate = new Date(r.date_fulfilled);
+      const staffTag = r.staff_id ? (' by staff #' + escapeHtml(String(r.staff_id))) : '';
+      pickedUpMeta = '<div class="pmeta">picked up ' + fulfilledDate.toLocaleDateString() + ' ' +
+        formatTimeHHMMSS(fulfilledDate) + staffTag + '</div>';
+    }
     return '<div class="pickup-row">' +
       '<div class="pinfo">' +
         '<div class="pname">' + escapeHtml(r.quantity + ' × ' + r.product_name) + '</div>' +
-        '<div class="pmeta">' + date.toLocaleDateString() + ' ' + formatTimeHHMMSS(date) + ' · ' + formatPoints(r.points_spent) + ' pts' + staffTag + '</div>' +
+        '<div class="pmeta">redeemed ' + date.toLocaleDateString() + ' ' + formatTimeHHMMSS(date) + ' · ' + formatPoints(r.points_spent) + ' pts</div>' +
+        pickedUpMeta +
       '</div>' +
       (isPending
         ? '<span class="pcode-tag mono">' + escapeHtml(r.code) + '</span>'
@@ -532,13 +539,18 @@
   function renderStaffRow(r){
     const isPending = r.status === 'PENDING';
     const date = new Date(r.date_created);
-    const pickedUpTag = isPending
-      ? ''
-      : (' · picked up by ' + escapeHtml(r.staff_name || 'unknown staff'));
+    let pickedUpMeta = '';
+    if(!isPending && r.date_fulfilled){
+      const fulfilledDate = new Date(r.date_fulfilled);
+      pickedUpMeta = '<div class="pmeta">picked up ' + fulfilledDate.toLocaleDateString() + ' ' +
+        formatTimeHHMMSS(fulfilledDate) + ' by ' + escapeHtml(r.staff_name || 'unknown staff') + '</div>';
+    }
     return '<div class="pickup-row">' +
       '<div class="pinfo">' +
         '<div class="pname">' + escapeHtml(r.customer_name || ('customer #' + r.aronium_customer_id)) + ' — ' + escapeHtml(r.quantity + ' × ' + r.product_name) + '</div>' +
-        '<div class="pmeta">code ' + escapeHtml(r.code) + ' · redeemed ' + date.toLocaleDateString() + ' ' + formatTimeHHMMSS(date) + pickedUpTag + '</div>' +
+        '<div class="pmeta">code ' + escapeHtml(r.code) + '</div>' + 
+        '<div class="pmeta">redeemed ' + date.toLocaleDateString() + ' ' + formatTimeHHMMSS(date) + '</div>' +
+          pickedUpMeta +
       '</div>' +
       (isPending
         ? '<button class="btn small" data-fulfill="' + r.id + '">Mark picked up</button>'

@@ -7,7 +7,6 @@ from app.database import get_db
 from app.models import SyncState
 from app.schemas import SyncResultOut
 from app.services import points_service
-from app.services import inventory
 
 router = APIRouter(
     prefix="/sync",
@@ -78,13 +77,9 @@ def perform_sync(db: Session) -> SyncResultOut:
 
         state.last_document_id = doc["Id"]
 
-    # Initialize inventory for any new products (only if they don't have inventory yet),
-    # seeded from Aronium's real Stock quantity - not a guessed default.
-    products = general_client.list_products(limit=500)
-    for product in products:
-        if not product.get("IsService", False):  # Only track inventory for products
-            real_quantity = int(product.get("Quantity", 0))
-            inventory.initialize_inventory(db, product["Id"], real_quantity)
+    # Redeemable stock is read live from Aronium's Quantity on every
+    # /products call (see services/inventory.py) - there's no separate
+    # counter here left to seed or resync.
 
     db.add(state)
     db.commit()

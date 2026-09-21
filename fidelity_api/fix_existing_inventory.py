@@ -1,3 +1,9 @@
+# DEPRECATED: redeemable stock is now read live from Aronium's Quantity on
+# every /products call (see app/services/inventory.py), so there's no
+# separate counter left that can drift and need fixing. This script is kept
+# only for reference / old deployments that still have product_inventory
+# rows lying around; it's safe to delete.
+
 from app.database import SessionLocal
 from app.models import ProductInventory
 from app import general_client

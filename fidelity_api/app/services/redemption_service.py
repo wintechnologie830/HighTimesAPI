@@ -158,7 +158,7 @@ def fulfill(db: Session, redemption_id: int, staff_id: int) -> Redemption:
         raise AlreadyFulfilledError(f"Redemption {redemption_id} was already picked up")
 
     redemption.status = RedemptionStatus.FULFILLED
-    redemption.date_fulfilled = datetime.utcnow()
+    redemption.date_fulfilled = datetime.now()
     redemption.staff_id = staff_id
     db.add(redemption)
     db.commit()
