@@ -39,6 +39,27 @@ class CustomerCredential(Base):
     date_created = Column(DateTime, default=datetime.now)
 
 
+class LegacyCustomer(Base):
+    """
+    A customer that already existed in Aronium (rung up at the till long
+    before this app) and was brought into the loyalty system by
+    migration_service.migrate_aronium_customers().
+
+    Aronium stores no passwords, so a migrated customer has a LoyaltyAccount
+    but no CustomerCredential yet. They get a one-time activation code
+    (only its hash is kept here) and choose their own username/password with
+    POST /auth/claim. `date_claimed` stays NULL until they do.
+    """
+
+    __tablename__ = "legacy_customers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    aronium_customer_id = Column(Integer, unique=True, index=True, nullable=False)
+    claim_code_hash = Column(String, unique=True, index=True, nullable=False)
+    date_migrated = Column(DateTime, default=datetime.now)
+    date_claimed = Column(DateTime, nullable=True)
+
+
 class StaffCredential(Base):
     __tablename__ = "staff_credentials"
 

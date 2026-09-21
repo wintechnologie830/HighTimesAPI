@@ -76,6 +76,25 @@ Cela permet d'enregistrer **quel employé** a remis l'article au client, plutôt
 
 Les clients voient uniquement un **id** de staff sur leur écran « My pickups » ; le nom réel de l'employé est affiché uniquement sur le staff pickup desk.
 
+### 5. Migrer les clients Aronium existants
+
+Si le magasin utilise déjà Aronium, ses clients existent dans `pos.db` mais n'ont ni compte de fidélité ni identifiants de connexion. Un script unique les importe (general_api doit être démarré) :
+
+```bash
+cd fidelity_api
+python migrate_aronium_customers.py run --dry-run              # aperçu, n'écrit rien
+python migrate_aronium_customers.py run --csv codes.csv        # migration réelle
+python migrate_aronium_customers.py reissue 42 --csv code.csv  # nouveau code pour le client #42
+```
+
+Ce que fait la migration, pour chaque client Aronium actif (le « Walk-in customer », les clients désactivés et les clients déjà inscrits dans l'app sont ignorés) :
+
+* Elle crée son compte de fidélité avec **0 point** et aucune transaction : ses achats passés ne sont **pas** compensés. Pour que cela tienne aussi côté synchronisation, le curseur de `/sync` démarre maintenant au dernier document Aronium (et non à 0) sur une nouvelle installation ; seules les ventes faites à partir de ce moment rapportent des points.
+* Elle génère un **code d'activation** à usage unique (écrit dans le fichier CSV ; seul son hash est conservé, donc il ne peut pas être récupéré — utiliser `reissue` en cas de perte). Aronium ne stocke aucun mot de passe : le client active son compte avec `POST /auth/claim` (`claim_code`, `password`, et `username` au besoin) et choisit lui-même son mot de passe.
+* Elle est **idempotente** : la relancer ne migre que les nouveaux clients.
+
+**Conflits de username :** si le nom Aronium d'un client est déjà utilisé par un compte de l'app, partagé avec un autre client Aronium (sans tenir compte des majuscules), ou vide, le client est signalé dans le rapport (colonne `username_conflict` du CSV), et `/auth/claim` répond **409** en lui demandant de choisir un autre `username`. Celui qui possède déjà le nom le garde. Le nom dans Aronium n'est jamais modifié.
+
 ## Nouveautés depuis la dernière version
 
 * Inscription / connexion des clients, avec `/auth/register` et `/auth/login`.

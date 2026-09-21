@@ -21,6 +21,10 @@ class DocumentOut(BaseModel):
     DocumentTypeCode: str
 
 
+class LatestDocumentOut(BaseModel):
+    latest_document_id: int
+
+
 class ProductOut(BaseModel):
     Id: int
     Name: str

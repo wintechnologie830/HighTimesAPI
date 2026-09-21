@@ -123,6 +123,19 @@ def list_recent_documents(since_id: int = 0, limit: int = 100) -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def get_latest_document_id() -> int:
+    """
+    Highest Document.Id currently in Aronium (0 if there are no documents).
+
+    Used by fidelityAPI to start its points-sync cursor at "now" on a fresh
+    install, so sales that happened before the loyalty system existed never
+    earn points retroactively.
+    """
+    with aronium_connection() as conn:
+        row = conn.execute("SELECT COALESCE(MAX(Id), 0) FROM Document").fetchone()
+        return int(row[0])
+
+
 # ---------- Products (so the app can show what points can be redeemed for) ----------
 
 def list_products(search: str | None = None, limit: int = 200) -> list[dict]:

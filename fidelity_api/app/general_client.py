@@ -76,6 +76,10 @@ def list_recent_documents(since_id: int = 0, limit: int = 200) -> list[dict]:
     return _get("/documents/recent", params={"since_id": since_id, "limit": limit}).json()
 
 
+def get_latest_document_id() -> int:
+    return _get("/documents/latest-id").json()["latest_document_id"]
+
+
 def create_customer(name: str, email: str | None, phone: str | None) -> dict:
     return _post("/customers", json={"name": name, "email": email, "phone": phone}).json()
 

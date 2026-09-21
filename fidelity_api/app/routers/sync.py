@@ -27,7 +27,12 @@ EARNABLE_DOCUMENT_TYPE_CODES = {"200"}
 def _get_sync_state(db: Session) -> SyncState:
     state = db.query(SyncState).first()
     if state is None:
-        state = SyncState(last_document_id=0)
+        # First ever run: start from the newest Aronium document rather than
+        # from 0. Starting at 0 would sweep the store's entire sales history
+        # and award points for purchases made before the loyalty system
+        # existed - which is exactly what migrating existing customers must
+        # NOT do. Only sales rung up from now on earn points.
+        state = SyncState(last_document_id=general_client.get_latest_document_id())
         db.add(state)
         db.commit()
         db.refresh(state)

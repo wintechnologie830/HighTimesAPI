@@ -18,6 +18,18 @@ class LoginIn(BaseModel):
     password: str
 
 
+class ClaimIn(BaseModel):
+    claim_code: str
+    password: str = Field(min_length=8)
+    username: str | None = Field(
+        default=None,
+        description=(
+            "Defaults to the customer's existing Aronium name. Send a different "
+            "one when the API answers 409 because that name is already taken."
+        ),
+    )
+
+
 class AuthOut(BaseModel):
     aronium_customer_id: int
     name: str

@@ -427,24 +427,66 @@
       staffPinGate.classList.add('hidden');
       staffTools.classList.remove('hidden');
       refreshStaffLoginUI();
-      setStaffQueueMode('pending');
+      // Land on Account when nobody's signed in yet (so pickups get
+      // attributed correctly), otherwise go straight to the pickup queue.
+      setStaffSection(staffSession.token ? 'pickups' : 'account');
     }catch(e){
       staffPin = '';
       toast('Wrong staff PIN', 'err');
     }
   });
 
+  // ---------- section tabs: Account / Migrate customer / Pickups ----------
+  const staffSectionAccountBtn = document.getElementById('staffSectionAccountBtn');
+  const staffSectionMigrateBtn = document.getElementById('staffSectionMigrateBtn');
+  const staffSectionPickupsBtn = document.getElementById('staffSectionPickupsBtn');
+  const staffSectionAccount = document.getElementById('staffSectionAccount');
+  const staffSectionMigrate = document.getElementById('staffSectionMigrate');
+  const staffSectionPickups = document.getElementById('staffSectionPickups');
+
+  function setStaffSection(section){
+    staffSectionAccountBtn.classList.toggle('active', section === 'account');
+    staffSectionMigrateBtn.classList.toggle('active', section === 'migrate');
+    staffSectionPickupsBtn.classList.toggle('active', section === 'pickups');
+    staffSectionAccount.classList.toggle('hidden', section !== 'account');
+    staffSectionMigrate.classList.toggle('hidden', section !== 'migrate');
+    staffSectionPickups.classList.toggle('hidden', section !== 'pickups');
+    if(section === 'pickups'){
+      refreshStaffQueue();
+    }
+  }
+  staffSectionAccountBtn.addEventListener('click', () => setStaffSection('account'));
+  staffSectionMigrateBtn.addEventListener('click', () => setStaffSection('migrate'));
+  staffSectionPickupsBtn.addEventListener('click', () => setStaffSection('pickups'));
+
   // ---------- individual staff sign-in / sign-up ----------
   // Separate from the PIN above: the PIN just gets you into the back
   // room, this is who's actually standing at the counter. Required
   // before "Mark picked up" will work, so every fulfilled redemption is
   // attributed to a real person.
+  //
+  // The status line at the top of the panel mirrors this regardless of
+  // which section is open, so staff don't have to flip to Account just to
+  // check whether they're signed in.
   function refreshStaffLoginUI(){
     const signedIn = !!staffSession.token;
     staffLoginBox.classList.toggle('hidden', signedIn);
     staffSignedInBox.classList.toggle('hidden', !signedIn);
     if(signedIn){
       document.getElementById('staffSignedInName').textContent = staffSession.name;
+    }
+    const statusEl = document.getElementById('staffStatusLine');
+    statusEl.classList.toggle('signed-out', !signedIn);
+    if(signedIn){
+      statusEl.innerHTML = 'Signed in as <strong>' + escapeHtml(staffSession.name) +
+        '</strong> · <button class="link-btn" id="staffStatusLogoutBtn">sign out</button>';
+      document.getElementById('staffStatusLogoutBtn').addEventListener('click', () => {
+        document.getElementById('staffLogoutBtn').click();
+      });
+    }else{
+      statusEl.innerHTML = 'Not signed in — pickups need a signed-in staff account to be attributed. ' +
+        '<button class="link-btn" id="staffStatusAccountBtn">Go to Account</button>';
+      document.getElementById('staffStatusAccountBtn').addEventListener('click', () => setStaffSection('account'));
     }
   }
 
@@ -520,6 +562,41 @@
     staffTabSignin.click();
     refreshStaffLoginUI();
     refreshStaffQueue();
+  });
+
+  // ---------- migrate a legacy (Aronium) customer ----------
+  // Uses the same fidelityAPI X-API-Key as the rest of the app (via `api()`),
+  // not the staff PIN/token - POST /auth/claim is gated by require_mobile_api_key,
+  // same as /auth/login and /auth/register.
+  document.getElementById('migrateClaimBtn').addEventListener('click', async () => {
+    const claim_code = document.getElementById('migrateClaimCodeInput').value.trim();
+    const username = document.getElementById('migrateUsernameInput').value.trim();
+    const password = document.getElementById('migratePasswordInput').value;
+    const resultEl = document.getElementById('migrateClaimResult');
+    const btn = document.getElementById('migrateClaimBtn');
+
+    if(!claim_code){ toast('Enter the activation code first.', 'err'); return; }
+    if(!password || password.length < 8){ toast('Password needs at least 8 characters.', 'err'); return; }
+
+    btn.disabled = true;
+    try{
+      const body = { claim_code, password };
+      if(username) body.username = username;
+      const auth = await api('/auth/claim', { method: 'POST', body });
+      resultEl.innerHTML = '<div class="empty">Activated <strong>' +
+        escapeHtml(auth.name) + '</strong> (customer #' + escapeHtml(String(auth.aronium_customer_id)) + ').</div>';
+      document.getElementById('migrateClaimCodeInput').value = '';
+      document.getElementById('migrateUsernameInput').value = '';
+      document.getElementById('migratePasswordInput').value = '';
+      toast('Account activated.', 'ok');
+    }catch(e){
+      // 409 from the API means the username is taken - let staff pick a
+      // different one and resubmit with the same claim code + password.
+      resultEl.innerHTML = '';
+      toast(e.message, 'err');
+    }finally{
+      btn.disabled = false;
+    }
   });
 
   document.getElementById('staffCodeLookupBtn').addEventListener('click', async () => {

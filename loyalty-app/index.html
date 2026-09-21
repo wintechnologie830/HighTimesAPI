@@ -138,10 +138,10 @@
 <div class="staff-panel-overlay hidden" id="staffOverlay">
   <div class="staff-panel">
     <div class="close-row">
-      <h2>Staff pickup desk</h2>
+      <h2>Staff desk</h2>
       <button class="link-btn" id="staffClose">close</button>
     </div>
-    <p class="page-sub" style="margin-top:6px;">Look up a redemption by code, or find a customer in the pending list, then mark it picked up.</p>
+    <p class="page-sub" id="staffPanelSub" style="margin-top:6px;">Sign in, activate a legacy customer, or work the pickup queue.</p>
 
     <div id="staffPinGate">
       <div class="field">
@@ -152,54 +152,80 @@
     </div>
 
     <div id="staffTools" class="hidden">
-      <div id="staffLoginBox">
-        <div class="staff-section-title">Staff account</div>
+      <div class="staff-status-line" id="staffStatusLine"></div>
+
+      <div class="mode-switch staff-section-tabs" style="margin-bottom:20px;">
+        <button class="active" id="staffSectionAccountBtn">Account</button>
+        <button id="staffSectionMigrateBtn">Migrate customer</button>
+        <button id="staffSectionPickupsBtn">Pickups</button>
+      </div>
+
+      <div id="staffSectionAccount">
+        <div id="staffLoginBox">
+          <div class="mode-switch" style="margin-bottom:10px;">
+            <button class="active" id="staffTabSignin">Sign in</button>
+            <button id="staffTabSignup">Create account</button>
+          </div>
+
+          <div id="staffSigninForm">
+            <p class="page-sub" style="margin:0 0 10px;">Sign in with your own account so pickups you complete are attributed to you.</p>
+            <div class="staff-lookup-row">
+              <input id="staffUsernameInput" placeholder="Username" autocomplete="username" />
+              <input id="staffPasswordInput" type="password" placeholder="Password" autocomplete="current-password" />
+              <button class="btn" id="staffLoginBtn">Sign in</button>
+            </div>
+          </div>
+
+          <div id="staffSignupForm" class="hidden">
+            <p class="page-sub" style="margin:0 0 10px;">New here? Set up your own staff account - it's yours, no one else's.</p>
+            <div class="staff-lookup-row">
+              <input id="staffSignupUsernameInput" placeholder="Choose a username" autocomplete="username" />
+              <input id="staffSignupNameInput" placeholder="Your full name" />
+            </div>
+            <div class="staff-lookup-row">
+              <input id="staffSignupPasswordInput" type="password" placeholder="Password (min 8 characters)" autocomplete="new-password" minlength="8" />
+              <button class="btn" id="staffSignupBtn">Create account</button>
+            </div>
+          </div>
+        </div>
+        <div id="staffSignedInBox" class="hidden">
+          <p class="page-sub" style="margin:0 0 10px;">Signed in as <strong id="staffSignedInName">—</strong> · <button class="link-btn" id="staffLogoutBtn">sign out</button></p>
+        </div>
+      </div>
+
+      <div id="staffSectionMigrate" class="hidden">
+        <p class="page-sub" style="margin:0 0 10px;">Activate a legacy Aronium customer using the one-time activation code the shop gave them, and set their new password.</p>
+        <div class="staff-lookup-row">
+          <input id="migrateClaimCodeInput" placeholder="Activation code (XXXX-XXXX-XXXX)" autocomplete="off" />
+        </div>
+        <div class="staff-lookup-row">
+          <input id="migrateUsernameInput" placeholder="Username (leave blank to keep their Aronium name)" autocomplete="off" />
+        </div>
+        <div class="staff-lookup-row">
+          <input id="migratePasswordInput" type="password" placeholder="New password (min 8 characters)" autocomplete="new-password" minlength="8" />
+          <button class="btn" id="migrateClaimBtn">Activate account</button>
+        </div>
+        <div id="migrateClaimResult"></div>
+      </div>
+
+      <div id="staffSectionPickups" class="hidden">
+        <div class="staff-lookup-row">
+          <input id="staffCodeInput" placeholder="Enter pickup code…" maxlength="6" />
+          <button class="btn" id="staffCodeLookupBtn">Look up</button>
+        </div>
+        <div id="staffLookupResult"></div>
+
+        <div class="staff-section-title">Pickups</div>
         <div class="mode-switch" style="margin-bottom:10px;">
-          <button class="active" id="staffTabSignin">Sign in</button>
-          <button id="staffTabSignup">Create account</button>
+          <button class="active" id="staffTabPending">Pending</button>
+          <button id="staffTabMine">My pickups</button>
+          <button id="staffTabAll">All pickups</button>
         </div>
-
-        <div id="staffSigninForm">
-          <p class="page-sub" style="margin:0 0 10px;">Sign in with your own account so pickups you complete are attributed to you.</p>
-          <div class="staff-lookup-row">
-            <input id="staffUsernameInput" placeholder="Username" autocomplete="username" />
-            <input id="staffPasswordInput" type="password" placeholder="Password" autocomplete="current-password" />
-            <button class="btn" id="staffLoginBtn">Sign in</button>
-          </div>
+        <div class="search-row" id="staffSearchRow">
+          <input id="staffSearchInput" placeholder="Search by customer name…" />
         </div>
-
-        <div id="staffSignupForm" class="hidden">
-          <p class="page-sub" style="margin:0 0 10px;">New here? Set up your own staff account - it's yours, no one else's.</p>
-          <div class="staff-lookup-row">
-            <input id="staffSignupUsernameInput" placeholder="Choose a username" autocomplete="username" />
-            <input id="staffSignupNameInput" placeholder="Your full name" />
-          </div>
-          <div class="staff-lookup-row">
-            <input id="staffSignupPasswordInput" type="password" placeholder="Password (min 8 characters)" autocomplete="new-password" minlength="8" />
-            <button class="btn" id="staffSignupBtn">Create account</button>
-          </div>
-        </div>
+        <div id="staffPendingList"></div>
       </div>
-      <div id="staffSignedInBox" class="hidden">
-        <p class="page-sub" style="margin:0 0 10px;">Signed in as <strong id="staffSignedInName">—</strong> · <button class="link-btn" id="staffLogoutBtn">sign out</button></p>
-      </div>
-
-      <div class="staff-lookup-row">
-        <input id="staffCodeInput" placeholder="Enter pickup code…" maxlength="6" />
-        <button class="btn" id="staffCodeLookupBtn">Look up</button>
-      </div>
-      <div id="staffLookupResult"></div>
-
-      <div class="staff-section-title">Pickups</div>
-      <div class="mode-switch" style="margin-bottom:10px;">
-        <button class="active" id="staffTabPending">Pending</button>
-        <button id="staffTabMine">My pickups</button>
-        <button id="staffTabAll">All pickups</button>
-      </div>
-      <div class="search-row" id="staffSearchRow">
-        <input id="staffSearchInput" placeholder="Search by customer name…" />
-      </div>
-      <div id="staffPendingList"></div>
     </div>
   </div>
 </div>

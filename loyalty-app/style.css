@@ -405,3 +405,29 @@ p.page-sub{
   font-family:'Manrope', sans-serif; font-size:12px; font-weight:700;
   color: var(--turf-dim); margin: 22px 0 10px;
 }
+
+/* status line above the section tabs - always visible regardless of which
+   section is open, so staff can see at a glance whether they're signed in
+   without switching to the Account tab */
+.staff-status-line{
+  font-family:'JetBrains Mono', monospace; font-size: 11px;
+  color: var(--turf-dim);
+  background: rgba(47,107,66,0.08);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin-bottom: 18px;
+}
+.staff-status-line.signed-out{
+  color: var(--amber-dim);
+  background: rgba(217,143,29,0.08);
+}
+.staff-status-line .link-btn{ margin-left: 4px; }
+
+/* top-level section tabs (Account / Migrate customer / Pickups) get a bit
+   more presence than the smaller sub-tabs (sign in/up, pending/mine/all)
+   nested inside each section, so the hierarchy reads clearly */
+.staff-section-tabs button{
+  font-size: 13px;
+  padding: 9px 15px;
+}
